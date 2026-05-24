@@ -1,0 +1,27 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+logs/
+models/*.weights
+models/*.cfg
+*.pt
+*.onnx
+.DS_Store
+
+# Large firmware files
+*.fwpkg
+*.tar.gz
+*.tgz
+*.tar
+*.zip
+
+# Build artifacts
+*.aab
+*.apk
+*.keystore
+
+# Temporary files
+/tmp/
+*.log

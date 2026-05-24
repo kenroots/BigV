@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BigV Safari - QR Code</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      border-radius: 20px;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #f0883e 0%, #d29922 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      color: #8b949e;
+      margin-bottom: 30px;
+      font-size: 1.1rem;
+    }
+    .qr-wrapper {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      display: inline-block;
+      margin: 20px 0;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .qr-code {
+      width: 300px;
+      height: 300px;
+      display: block;
+    }
+    .instructions {
+      margin-top: 30px;
+      text-align: left;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 4px solid #f0883e;
+    }
+    .instructions h2 {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+      color: #f0883e;
+    }
+    .step {
+      margin: 12px 0;
+      padding-left: 30px;
+      position: relative;
+      color: #c9d1d9;
+      line-height: 1.6;
+    }
+    .step::before {
+      content: attr(data-icon);
+      position: absolute;
+      left: 0;
+      font-size: 1.2rem;
+    }
+    .url {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      color: #58a6ff;
+      word-break: break-all;
+    }
+    .platforms {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 25px;
+      flex-wrap: wrap;
+    }
+    .platform {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .platform-icon {
+      font-size: 1.5rem;
+      display: block;
+      margin-bottom: 5px;
+    }
+    @media print {
+      body {
+        background: white;
+      }
+      .container {
+        background: white;
+        box-shadow: none;
+        border: 2px solid #000;
+      }
+      h1, .subtitle, .step {
+        color: #000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="/static/img/icon-192.png" alt="BigV Safari" class="logo">
+    <h1>🦁 BigV Safari</h1>
+    <p class="subtitle">AI Wildlife Spotter for Africa</p>
+    
+    <div class="qr-wrapper">
+      <img src="/static/img/qr-code.png" alt="QR Code" class="qr-code">
+    </div>
+    
+    <div class="url">
+      https://bigv-production.up.railway.app
+    </div>
+
+    <div class="platforms">
+      <div class="platform">
+        <span class="platform-icon">📱</span>
+        iPhone Safari
+      </div>
+      <div class="platform">
+        <span class="platform-icon">🤖</span>
+        Android Chrome
+      </div>
+      <div class="platform">
+        <span class="platform-icon">🏪</span>
+        Google Play
+      </div>
+    </div>
+    
+    <div class="instructions">
+      <h2>📲 How to Install</h2>
+      
+      <div class="step" data-icon="1️⃣">
+        <strong>Scan the QR code</strong> with your phone camera
+      </div>
+      
+      <div class="step" data-icon="2️⃣">
+        <strong>iPhone:</strong> Open in Safari → Tap Share → "Add to Home Screen"
+      </div>
+      
+      <div class="step" data-icon="3️⃣">
+        <strong>Android:</strong> Open in Chrome → Tap menu → "Install app"<br>
+        <em>Or search "BigV Safari" in Google Play Store</em>
+      </div>
+      
+      <div class="step" data-icon="✅">
+        Launch from your home screen like any app!
+      </div>
+    </div>
+  </div>
+</body>
+</html>

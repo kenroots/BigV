@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="BigV Safari" />
+  <meta name="application-name" content="BigV Safari" />
+  <meta name="theme-color" content="#c8860a" />
+  <meta name="description" content="BigV Safari — AI wildlife spotter for tourists & guides in Africa" />
+
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/img/icon-180.png" />
+  <link rel="apple-touch-icon" sizes="192x192" href="/static/img/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/icon-192.png" />
+
+  <title>BigV Safari — Wildlife Spotter</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ HEADER ══ -->
+<header class="header safari-header">
+  <div class="header-left">
+    <div class="bigv-logo">
+      <img src="/static/img/icon-192.png" alt="BigV" class="logo-img" />
+      <div>
+        <h1>BigV <span class="safari-badge">SAFARI</span></h1>
+        <p class="subtitle" id="parkSubtitle">AI Wildlife Spotter · Africa</p>
+      </div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="gps-badge" id="gpsBadge" style="display:none"></span>
+    <!-- Guide / Tourist mode toggle -->
+    <div class="mode-toggle" id="modeToggle" title="Switch mode">
+      <button class="mode-btn active" id="btnTourist" onclick="setMode('tourist')">🧳 Tourist</button>
+      <button class="mode-btn" id="btnGuide" onclick="setMode('guide')">🎓 Guide</button>
+    </div>
+    <div class="status-badge" id="connectionStatus">
+      <span class="dot"></span> <span id="statusText">Connecting...</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-label">Sightings</span>
+      <span class="stat-value" id="totalSightings">0</span>
+    </div>
+    <button class="btn btn-install" id="installBtn" style="display:none">📲 Install</button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════ WAZE NEARBY BANNER ══ -->
+<div class="nearby-banner" id="nearbyBanner" style="display:none">
+  <div class="nearby-banner-icon">👥</div>
+  <div class="nearby-banner-body" id="nearbyBannerText">Wildlife spotted nearby</div>
+  <button class="nearby-banner-close" onclick="dismissNearbyBanner()">✕</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ BIG FIVE TRACKER ══ -->
+<div class="big-five-bar" id="bigFiveBar">
+  <span class="big-five-label">🏆 Big Five:</span>
+  <span class="big-five-item" id="bf-lion"     data-animal="lion">🦁 Lion</span>
+  <span class="big-five-item" id="bf-leopard"  data-animal="leopard">🐆 Leopard</span>
+  <span class="big-five-item" id="bf-elephant" data-animal="elephant">🐘 Elephant</span>
+  <span class="big-five-item" id="bf-rhinoceros" data-animal="rhinoceros">🦏 Rhino</span>
+  <span class="big-five-item" id="bf-buffalo"  data-animal="buffalo">🐃 Buffalo</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ MOBILE NAV ══ -->
+<nav class="mobile-nav" id="mobileNav">
+  <button class="nav-tab active" data-tab="camera" onclick="switchTab('camera')">
+    📷<span>Camera</span>
+  </button>
+  <button class="nav-tab" data-tab="detection" onclick="switchTab('detection')">
+    🔍<span>Sighting</span>
+  </button>
+  <button class="nav-tab" data-tab="map" onclick="switchTab('map')">
+    🗺<span>Map</span>
+    <span class="nav-badge" id="mapBadge" style="display:none">0</span>
+  </button>
+  <button class="nav-tab" data-tab="guide" onclick="switchTab('guide')">
+    📖<span>Field Guide</span>
+  </button>
+  <button class="nav-tab" data-tab="alerts" onclick="switchTab('alerts')">
+    🚨<span>Alerts</span>
+    <span class="nav-badge" id="alertBadge" style="display:none">0</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN ══ -->
+<main class="main-grid">
+
+  <!-- ── TAB: Camera Feed ───────────────────────────────────────── -->
+  <section class="panel camera-panel tab-panel active" id="tab-camera">
+    <div class="panel-header">
+      <h2>📷 Live Camera</h2>
+      <div class="camera-controls">
+        <select id="cameraSelect" class="select">
+          <option value="">Default Camera</option>
+        </select>
+        <button id="startBtn" class="btn btn-primary">▶ Start</button>
+        <button id="stopBtn" class="btn btn-danger" disabled>⏹ Stop</button>
+        <button id="uploadBtn" class="btn btn-secondary">📁 Upload</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" />
+      </div>
+    </div>
+
+    <div class="camera-container">
+      <video id="videoFeed" autoplay muted playsinline></video>
+      <canvas id="overlayCanvas"></canvas>
+      <div class="camera-overlay" id="cameraOverlay">
+        <div class="overlay-content">
+          <img src="/static/img/icon-192.png" class="overlay-logo" alt="BigV" />
+          <p>Tap <strong>▶ Start</strong> to activate camera</p>
+          <p class="overlay-sub">Point at wildlife for instant AI identification</p>
+        </div>
+      </div>
+      <div class="scan-line" id="scanLine"></div>
+      <div class="camera-detection-badge" id="cameraDetBadge" style="display:none">
+        <span id="cameraDetText">🐾 Detecting...</span>
+      </div>
+    </div>
+
+    <div class="camera-meta">
+      <span id="cameraId">Camera: —</span>
+      <span id="fpsLabel">FPS: —</span>
+      <span id="frameCount">Frames: 0</span>
+    </div>
+
+    <!-- Safari park location selector -->
+    <div class="location-row">
+      <label>📍</label>
+      <input type="text" id="locationInput" class="input" placeholder="e.g. Serengeti, Maasai Mara..." value="Safari" list="parkList" />
+      <datalist id="parkList">
+        <option value="Serengeti National Park, Tanzania">
+        <option value="Maasai Mara, Kenya">
+        <option value="Kruger National Park, South Africa">
+        <option value="Okavango Delta, Botswana">
+        <option value="Amboseli National Park, Kenya">
+        <option value="Ngorongoro Crater, Tanzania">
+        <option value="Chobe National Park, Botswana">
+        <option value="Hwange National Park, Zimbabwe">
+        <option value="Bwindi Impenetrable Forest, Uganda">
+        <option value="Queen Elizabeth National Park, Uganda">
+        <option value="South Luangwa, Zambia">
+        <option value="Etosha National Park, Namibia">
+      </datalist>
+    </div>
+  </section>
+
+  <!-- ── TAB: Detection / Sighting Results ─────────────────────── -->
+  <section class="panel detection-panel tab-panel" id="tab-detection">
+    <div class="panel-header">
+      <h2>🔍 Current Sighting</h2>
+      <div class="danger-meter-wrap">
+        <span class="danger-label">Danger</span>
+        <div class="danger-bar">
+          <div class="danger-fill" id="dangerFill"></div>
+        </div>
+        <span class="danger-score" id="dangerScore">0%</span>
+      </div>
+    </div>
+
+    <div class="detection-card" id="currentDetection">
+      <div class="no-detection">
+        <span>🌿</span>
+        <p>Awaiting wildlife...</p>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Point camera at animals to identify</p>
+      </div>
+    </div>
+
+    <!-- Animal fact card (shown when animal detected) -->
+    <div class="animal-fact-card" id="animalFactCard" style="display:none"></div>
+
+    <div class="agent-box">
+      <div class="agent-header">🎓 Guide Notes</div>
+      <div class="agent-text" id="agentText">Waiting for first sighting...</div>
+    </div>
+
+    <div class="recs-box" id="recsBox" style="display:none">
+      <div class="recs-header">📋 Safari Advice</div>
+      <ul class="recs-list" id="recsList"></ul>
+    </div>
+
+    <!-- Report to Ranger button (shown for critical/high) -->
+    <div id="rangerReportBox" style="display:none">
+      <button class="btn btn-ranger" id="rangerBtn" onclick="reportToRanger()">
+        📻 Report to Ranger
+      </button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stats-grid-item">
+        <span class="stats-grid-icon">🦁</span>
+        <span class="stats-grid-val" id="statAnimals">0</span>
+        <span class="stats-grid-label">Animals</span>
+      </div>
+      <div class="stats-grid-item">
+        <span class="stats-grid-icon">🏆</span>
+        <span class="stats-grid-val" id="statBigFive">0/5</span>
+        <span class="stats-grid-label">Big Five</span>
+      </div>
+      <div class="stats-grid-item">
+        <span class="stats-grid-icon">📷</span>
+        <span class="stats-grid-val" id="statFrames">0</span>
+        <span class="stats-grid-label">Frames</span>
+      </div>
+      <div class="stats-grid-item">
+        <span class="stats-grid-icon">⏱</span>
+        <span class="stats-grid-val" id="statUptime">00:00</span>
+        <span class="stats-grid-label">Drive Time</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAB: Community Map ─────────────────────────────────────── -->
+  <section class="panel map-panel tab-panel" id="tab-map">
+    <div class="panel-header">
+      <h2>🗺 Safari Map</h2>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="community-count-label">Last hour:</span>
+        <span class="stat-pill">
+          <span class="stat-label">Sightings</span>
+          <span class="stat-value" id="communityCount">0</span>
+        </span>
+        <button class="btn btn-sm" onclick="loadCommunitySightings()">🔄</button>
+        <button class="btn btn-primary btn-sm" id="pinLocationBtn" onclick="togglePinMode()">
+          📍 Pin Sighting
+        </button>
+      </div>
+    </div>
+
+    <div class="map-legend">
+      <span class="legend-item critical">🔴 Dangerous</span>
+      <span class="legend-item high">🟠 High Alert</span>
+      <span class="legend-item medium">🟡 Active</span>
+      <span class="legend-item low">🟢 Spotted</span>
+      <span class="legend-item own">📷 Your report</span>
+      <span class="legend-item community">👥 Other vehicles</span>
+      <span class="legend-item manual">📌 Manual pin</span>
+    </div>
+
+    <!-- Pin mode banner -->
+    <div class="pin-mode-banner" id="pinModeBanner" style="display:none">
+      <div class="pin-mode-text">
+        📍 <strong>Pin Mode Active</strong> — Click on map to mark wildlife location
+      </div>
+      <button class="btn btn-sm" onclick="cancelPinMode()">Cancel</button>
+    </div>
+
+    <div id="communityMap" class="community-map"></div>
+
+    <div class="map-info">
+      <p>📡 Live updates from all vehicles in the park — like Waze for wildlife</p>
+      <p>🔔 You'll be alerted when wildlife is spotted near your vehicle</p>
+      <p>📍 <strong>Tip:</strong> Click "Pin Sighting" to manually mark animal locations on the map</p>
+    </div>
+  </section>
+
+  <!-- ── TAB: Field Guide ───────────────────────────────────────── -->
+  <section class="panel guide-panel tab-panel" id="tab-guide">
+    <div class="panel-header">
+      <h2>📖 Field Guide</h2>
+      <input type="text" id="guideSearch" class="input" placeholder="Search animal..." oninput="filterGuide(this.value)" style="max-width:160px" />
+    </div>
+
+    <div class="big-five-section">
+      <div class="section-label">🏆 The Big Five</div>
+      <div class="guide-grid" id="bigFiveGrid"></div>
+    </div>
+
+    <div class="other-animals-section">
+      <div class="section-label">🌍 Other Safari Animals</div>
+      <div class="guide-grid" id="otherAnimalsGrid"></div>
+    </div>
+  </section>
+
+  <!-- ── TAB: Alerts & Sightings ────────────────────────────────── -->
+  <section class="panel log-panel tab-panel" id="tab-alerts">
+    <div class="panel-header">
+      <h2>🚨 Sightings Log</h2>
+      <button class="btn btn-sm" id="clearLogBtn">Clear</button>
+    </div>
+
+    <div class="alert-ticker" id="alertTicker">
+      <div class="ticker-empty">No sightings yet — drive is active</div>
+    </div>
+
+    <div class="sightings-log" id="sightingsLog"></div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════ STATS BAR (desktop) ══ -->
+<div class="stats-bar desktop-only">
+  <div class="stat-item">🦁 <span id="statAnimalsD">0</span> animals</div>
+  <div class="stat-item">🏆 <span id="statBigFiveD">0</span>/5 Big Five</div>
+  <div class="stat-item">📷 <span id="statFramesD">0</span> frames</div>
+  <div class="stat-item">⏱ <span id="statUptimeD">00:00:00</span></div>
+  <div class="stat-item">🤖 <span id="statModel">Loading...</span></div>
+  <div class="stat-item">👥 <span id="communityCountD">0</span> community</div>
+</div>
+<!-- ═══════════════════════════════════════════════════════ PIN ANIMAL MODAL ══ -->
+<div class="alert-modal" id="pinAnimalModal" style="display:none">
+  <div class="alert-modal-content" style="max-width:400px">
+    <h2 style="margin-bottom:16px">📍 Pin Wildlife Sighting</h2>
+    <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.85rem">
+      Mark the location and select the animal you spotted
+    </p>
+    
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:6px;font-weight:500">Animal Type</label>
+      <select id="pinAnimalSelect" class="select" style="width:100%">
+        <optgroup label="🏆 Big Five">
+          <option value="lion">🦁 Lion (Simba)</option>
+          <option value="leopard">🐆 Leopard (Chui)</option>
+          <option value="elephant">🐘 Elephant (Tembo)</option>
+          <option value="rhinoceros">🦏 Rhinoceros (Kifaru)</option>
+          <option value="buffalo">🐃 Buffalo (Nyati)</option>
+        </optgroup>
+        <optgroup label="🌍 Other Wildlife">
+          <option value="cheetah">🐆 Cheetah (Duma)</option>
+          <option value="giraffe">🦒 Giraffe (Twiga)</option>
+          <option value="zebra">🦓 Zebra (Punda Milia)</option>
+          <option value="hippopotamus">🦛 Hippopotamus (Kiboko)</option>
+          <option value="crocodile">🐊 Crocodile (Mamba)</option>
+          <option value="wildebeest">🐃 Wildebeest (Nyumbu)</option>
+          <option value="hyena">🐺 Hyena</option>
+          <option value="wild dog">🐕 Wild Dog</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:6px;font-weight:500">Notes (optional)</label>
+      <textarea id="pinNotes" class="input" rows="2" placeholder="e.g., Pride of 5 lions near waterhole" style="width:100%;resize:vertical"></textarea>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label style="display:block;margin-bottom:6px;font-weight:500">Priority Level</label>
+      <select id="pinPriority" class="select" style="width:100%">
+        <option value="low">🟢 Low - Safe to observe</option>
+        <option value="medium">🟡 Medium - Keep distance</option>
+        <option value="high">🟠 High - Dangerous animal</option>
+        <option value="critical">🔴 Critical - Immediate danger</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:20px">
+      <button class="btn btn-primary" onclick="confirmPinLocation()">✓ Pin Location</button>
+      <button class="btn btn-secondary" onclick="cancelPinLocation()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ ALERT MODAL ══ -->
+<div class="alert-modal" id="alertModal" style="display:none">
+  <div class="alert-modal-content">
+    <div class="alert-modal-icon" id="alertModalIcon">🚨</div>
+    <h2 id="alertModalTitle">Wildlife Alert</h2>
+    <p id="alertModalBody"></p>
+    <div class="alert-modal-recs" id="alertModalRecs"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-primary" onclick="closeAlertModal()">✓ Acknowledge</button>
+      <button class="btn btn-ranger" id="modalRangerBtn" onclick="reportToRanger()" style="display:none">📻 Report to Ranger</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ BIG FIVE COMPLETE MODAL ══ -->
+<div class="alert-modal" id="bigFiveModal" style="display:none">
+  <div class="alert-modal-content" style="text-align:center">
+    <div style="font-size:3rem;margin-bottom:8px">🏆</div>
+    <h2 style="color:#d29922;margin-bottom:8px">Big Five Complete!</h2>
+    <p style="color:var(--text-secondary);margin-bottom:16px">
+      Congratulations! You've spotted all five of Africa's most iconic animals on this safari drive.
+    </p>
+    <div style="font-size:1.8rem;margin-bottom:16px">🦁 🐆 🐘 🦏 🐃</div>
+    <button class="btn btn-primary" onclick="$('bigFiveModal').style.display='none'">🎉 Amazing!</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PWA INSTALL BANNER ══ -->
+<div class="install-banner" id="installBanner" style="display:none">
+  <div class="install-banner-content">
+    <img src="/static/img/icon-192.png" alt="BigV" class="install-banner-icon" />
+    <div>
+      <strong>Install BigV Safari</strong>
+      <p>Works offline on your safari drive</p>
+    </div>
+  </div>
+  <div class="install-banner-actions">
+    <button class="btn btn-primary btn-sm" id="installBannerBtn">Install</button>
+    <button class="btn btn-sm" onclick="dismissInstallBanner()">Later</button>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

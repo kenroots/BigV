@@ -1,0 +1,51 @@
+{
+  "name": "BigV Safari — Wildlife Spotter",
+  "short_name": "BigV Safari",
+  "description": "AI-powered real-time wildlife detection for safari tourists and guides. Identify the Big Five and 20+ African species instantly.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#f0883e",
+  "lang": "en",
+  "scope": "/",
+  "categories": ["travel", "nature", "education", "utilities"],
+  "icons": [
+    {
+      "src": "/static/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/img/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "BigV live detection on mobile"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Camera",
+      "short_name": "Camera",
+      "description": "Open live camera detection",
+      "url": "/?mode=camera",
+      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.bigvsafari.app",
+    "sha256_cert_fingerprints": [
+      "00:E4:F2:B1:47:38:38:96:4C:3D:E7:96:3F:0C:24:83:68:4A:72:48:53:19:4D:9D:7A:CA:12:5D:83:BF:25:9B"
+    ]
+  }
+}]

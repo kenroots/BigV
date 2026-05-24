@@ -1,0 +1,360 @@
+"""
+BigV — Wildlife Spotter
+Agentic Backend: FastAPI server with WebSocket live updates,
+AI animal detection agent, PWA support, and alert system.
+"""
+
+import asyncio
+import base64
+import json
+import logging
+import os
+import time
+import uuid
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Optional
+
+import cv2
+import numpy as np
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel
+
+from agent import WildlifeAgent
+from detector import WildlifeDetector
+from alert_manager import AlertManager
+from connection_manager import ConnectionManager
+from simulator import WildlifeSimulator
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+# Ensure log directory exists (use /tmp in Docker, ../logs locally)
+_log_dir = Path(__file__).parent.parent / "logs"
+_log_file = Path("/tmp/wildlife_spotter.log") if not _log_dir.exists() else _log_dir / "wildlife_spotter.log"
+try:
+    _log_dir.mkdir(exist_ok=True)
+    _log_file = _log_dir / "wildlife_spotter.log"
+except Exception:
+    _log_file = Path("/tmp/wildlife_spotter.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(str(_log_file)),
+    ],
+)
+logger = logging.getLogger("wildlife_spotter")
+
+# ─── App setup ────────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="BigV — Wildlife Spotter",
+    description="BigV: Agentic AI app for real-time wild animal detection",
+    version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve frontend
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
+
+# Serve service worker at root scope (required for PWA)
+@app.get("/sw.js")
+async def service_worker():
+    sw_path = FRONTEND_DIR / "static" / "sw.js"
+    return FileResponse(str(sw_path), media_type="application/javascript",
+                        headers={"Service-Worker-Allowed": "/"})
+
+# Serve Digital Asset Links (required for TWA / Google Play)
+@app.get("/.well-known/assetlinks.json")
+async def asset_links():
+    asset_path = FRONTEND_DIR / "static" / ".well-known" / "assetlinks.json"
+    return FileResponse(str(asset_path), media_type="application/json")
+
+# ─── Global instances ─────────────────────────────────────────────────────────
+manager = ConnectionManager()
+detector = WildlifeDetector()
+agent = WildlifeAgent(detector)
+alert_manager = AlertManager(manager)
+
+# ─── In-memory sighting log ───────────────────────────────────────────────────
+sightings: list[dict] = []
+
+# ─── Models ───────────────────────────────────────────────────────────────────
+class SightingRecord(BaseModel):
+    id: str
+    timestamp: str
+    animals: list[dict]
+    location: Optional[str] = "Unknown"
+    confidence: float
+    image_b64: Optional[str] = None
+    alert_level: str  # "low" | "medium" | "high" | "critical"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class AnalyzeRequest(BaseModel):
+    image_b64: str
+    location: Optional[str] = "Unknown"
+    camera_id: Optional[str] = "CAM-01"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    index_path = FRONTEND_DIR / "index.html"
+    return HTMLResponse(content=index_path.read_text(), status_code=200)
+
+@app.get("/qr", response_class=HTMLResponse)
+async def qr_code_page():
+    """Serve QR code page for easy app sharing."""
+    qr_path = FRONTEND_DIR / "qr-code.html"
+    return HTMLResponse(content=qr_path.read_text(), status_code=200)
+
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "online",
+        "app": "BigV",
+        "detector": detector.model_name,
+        "connected_clients": manager.count(),
+        "total_sightings": len(sightings),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/sightings")
+async def get_sightings(limit: int = 50):
+    return {"sightings": sightings[-limit:], "total": len(sightings)}
+
+
+@app.get("/sightings/{sighting_id}")
+async def get_sighting(sighting_id: str):
+    for s in sightings:
+        if s["id"] == sighting_id:
+            return s
+    raise HTTPException(status_code=404, detail="Sighting not found")
+
+
+@app.get("/community-sightings")
+async def get_community_sightings():
+    """Return all sightings from the last hour with GPS coords — Waze-style feed."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent = []
+    for s in sightings:
+        try:
+            ts = datetime.fromisoformat(s["timestamp"].replace("Z", "+00:00"))
+            if ts >= cutoff:
+                # Strip image data to keep payload small
+                entry = {k: v for k, v in s.items() if k != "image_b64"}
+                recent.append(entry)
+        except Exception:
+            pass
+    return {
+        "sightings": recent,
+        "total": len(recent),
+        "window_minutes": 60,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.post("/analyze")
+async def analyze_image(request: AnalyzeRequest):
+    """Analyze a base64-encoded image for wildlife."""
+    try:
+        # Decode image
+        img_data = base64.b64decode(request.image_b64.split(",")[-1])
+        nparr = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            raise HTTPException(status_code=400, detail="Invalid image data")
+
+        # Run agent
+        result = await agent.analyze(frame, request.location, request.camera_id)
+
+        if result["animals"]:
+            sighting = _build_sighting(result, request.image_b64, request.location,
+                                       lat=request.lat, lng=request.lng)
+            sightings.append(sighting)
+
+            # Broadcast to all WebSocket clients (community update)
+            await manager.broadcast(json.dumps({
+                "type": "community_sighting",
+                "data": {k: v for k, v in sighting.items() if k != "image_b64"},
+            }))
+            await manager.broadcast(json.dumps({
+                "type": "sighting",
+                "data": sighting,
+            }))
+
+            # Trigger alerts if needed
+            await alert_manager.process(sighting)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    location: str = "Unknown",
+    camera_id: str = "CAM-01",
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+):
+    """Upload an image file for wildlife analysis."""
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Cannot decode image")
+
+    result = await agent.analyze(frame, location, camera_id)
+
+    if result["animals"]:
+        img_b64 = "data:image/jpeg;base64," + base64.b64encode(contents).decode()
+        sighting = _build_sighting(result, img_b64, location, lat=lat, lng=lng)
+        sightings.append(sighting)
+        await manager.broadcast(json.dumps({
+            "type": "community_sighting",
+            "data": {k: v for k, v in sighting.items() if k != "image_b64"},
+        }))
+        await manager.broadcast(json.dumps({"type": "sighting", "data": sighting}))
+        await alert_manager.process(sighting)
+
+    return result
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    """WebSocket endpoint for live camera stream analysis."""
+    await manager.connect(websocket, client_id)
+    logger.info(f"Client connected: {client_id} | Total: {manager.count()}")
+
+    # Send welcome + current stats
+    await websocket.send_text(json.dumps({
+        "type": "connected",
+        "client_id": client_id,
+        "message": "Wildlife Spotter live feed active",
+        "total_sightings": len(sightings),
+        "recent": sightings[-5:] if sightings else [],
+    }))
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+
+            if msg.get("type") == "frame":
+                # Live frame from browser camera
+                frame_b64 = msg.get("image", "")
+                location = msg.get("location", "Live Camera")
+                camera_id = msg.get("camera_id", client_id)
+                lat = msg.get("lat")
+                lng = msg.get("lng")
+
+                try:
+                    img_data = base64.b64decode(frame_b64.split(",")[-1])
+                    nparr = np.frombuffer(img_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                    if frame is not None:
+                        result = await agent.analyze(frame, location, camera_id)
+
+                        # Always send result back to this client
+                        await websocket.send_text(json.dumps({
+                            "type": "analysis",
+                            "data": result,
+                        }))
+
+                        # If animals detected, broadcast sighting to all users (Waze-style)
+                        if result["animals"]:
+                            sighting = _build_sighting(result, frame_b64, location,
+                                                       lat=lat, lng=lng,
+                                                       reporter_id=client_id)
+                            sightings.append(sighting)
+                            # Community broadcast (no image, lightweight)
+                            await manager.broadcast(json.dumps({
+                                "type": "community_sighting",
+                                "data": {k: v for k, v in sighting.items() if k != "image_b64"},
+                            }))
+                            # Full sighting (with image) to all
+                            await manager.broadcast(json.dumps({
+                                "type": "sighting",
+                                "data": sighting,
+                            }))
+                            await alert_manager.process(sighting)
+
+                except Exception as e:
+                    logger.error(f"Frame processing error: {e}")
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": str(e),
+                    }))
+
+            elif msg.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+
+    except WebSocketDisconnect:
+        manager.disconnect(client_id)
+        logger.info(f"Client disconnected: {client_id} | Remaining: {manager.count()}")
+        await manager.broadcast(json.dumps({
+            "type": "client_left",
+            "client_id": client_id,
+            "connected_clients": manager.count(),
+        }))
+
+
+# ─── Helper ───────────────────────────────────────────────────────────────────
+def _build_sighting(result: dict, image_b64: str, location: str,
+                    lat: Optional[float] = None, lng: Optional[float] = None,
+                    reporter_id: Optional[str] = None) -> dict:
+    max_conf = max((a.get("confidence", 0) for a in result["animals"]), default=0)
+    alert_level = (
+        "critical" if max_conf >= 0.90 else
+        "high"     if max_conf >= 0.75 else
+        "medium"   if max_conf >= 0.55 else
+        "low"
+    )
+    return {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "animals": result["animals"],
+        "location": location,
+        "camera_id": result.get("camera_id", "unknown"),
+        "reporter_id": reporter_id,
+        "confidence": round(max_conf, 3),
+        "image_b64": image_b64,
+        "alert_level": alert_level,
+        "agent_summary": result.get("summary", ""),
+        "recommendations": result.get("recommendations", []),
+        "lat": lat,
+        "lng": lng,
+    }
+
+
+# ─── Entry point ──────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")
+
+# Made with Bob

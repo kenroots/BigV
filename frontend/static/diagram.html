@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BigV — System Architecture Diagram</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --card: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --orange: #f0883e;
+      --red: #f85149;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --teal: #39d353;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 60px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin-bottom: 4px;
+      color: var(--orange);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 32px;
+    }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      padding-left: 4px;
+    }
+
+    /* ── Flow container ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Stage row ── */
+    .stage-row {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      margin-bottom: 0;
+    }
+
+    /* ── Arrow connector ── */
+    .arrow-down {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 36px;
+      font-size: 1.4rem;
+      color: var(--border);
+      position: relative;
+    }
+
+    .arrow-down::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 100%;
+      background: var(--border);
+    }
+
+    .arrow-down span {
+      background: var(--bg);
+      padding: 0 4px;
+      z-index: 1;
+      position: relative;
+      color: var(--muted);
+      font-size: 1.2rem;
+    }
+
+    /* ── Stage box ── */
+    .stage {
+      flex: 1;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      position: relative;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      cursor: default;
+    }
+
+    .stage:hover {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(240,136,62,0.12);
+    }
+
+    .stage-num {
+      position: absolute;
+      top: -10px;
+      left: 14px;
+      background: var(--orange);
+      color: #000;
+      font-size: 0.65rem;
+      font-weight: 800;
+      border-radius: 20px;
+      padding: 1px 8px;
+      letter-spacing: 0.05em;
+    }
+
+    .stage-icon {
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .stage-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .stage-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .stage-tag {
+      display: inline-block;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-radius: 20px;
+      padding: 2px 7px;
+      margin-top: 6px;
+    }
+
+    .tag-frontend  { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+    .tag-backend   { background: rgba(63,185,80,0.15);  color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+    .tag-ai        { background: rgba(188,140,255,0.15);color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+    .tag-realtime  { background: rgba(240,136,62,0.15); color: var(--orange); border: 1px solid rgba(240,136,62,0.3); }
+    .tag-community { background: rgba(57,211,83,0.15);  color: var(--teal); border: 1px solid rgba(57,211,83,0.3); }
+
+    /* ── Multi-column stage row ── */
+    .stage-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stage-cols-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .stage-cols, .stage-cols-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Broadcast fan ── */
+    .broadcast-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 700px) {
+      .broadcast-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── Color-coded stage variants ── */
+    .stage.blue   { border-color: rgba(88,166,255,0.4); }
+    .stage.green  { border-color: rgba(63,185,80,0.4); }
+    .stage.purple { border-color: rgba(188,140,255,0.4); }
+    .stage.orange { border-color: rgba(240,136,62,0.4); }
+    .stage.teal   { border-color: rgba(57,211,83,0.4); }
+    .stage.red    { border-color: rgba(248,81,73,0.4); }
+
+    .stage.blue:hover   { border-color: var(--blue);   box-shadow: 0 0 0 3px rgba(88,166,255,0.12); }
+    .stage.green:hover  { border-color: var(--green);  box-shadow: 0 0 0 3px rgba(63,185,80,0.12); }
+    .stage.purple:hover { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(188,140,255,0.12); }
+    .stage.teal:hover   { border-color: var(--teal);   box-shadow: 0 0 0 3px rgba(57,211,83,0.12); }
+    .stage.red:hover    { border-color: var(--red);    box-shadow: 0 0 0 3px rgba(248,81,73,0.12); }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+
+    /* ── Detail list ── */
+    .detail-list {
+      list-style: none;
+      margin-top: 6px;
+    }
+
+    .detail-list li {
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 2px 0;
+      padding-left: 12px;
+      position: relative;
+    }
+
+    .detail-list li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--border);
+    }
+
+    /* ── Divider label ── */
+    .divider-label {
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 20px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .divider-label::before,
+    .divider-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Tooltip ── */
+    .stage[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: var(--text);
+      font-size: 0.7rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      border: 1px solid var(--border);
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    /* ── Back link ── */
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 0.82rem;
+    }
+
+    .back-link:hover { text-decoration: underline; }
+
+    /* ── Full-width stage ── */
+    .stage.full { width: 100%; }
+
+    /* ── WS badge ── */
+    .ws-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      background: rgba(240,136,62,0.2);
+      color: var(--orange);
+      border: 1px solid rgba(240,136,62,0.4);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-top: 4px;
+    }
+
+    .ws-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--orange);
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+
+<a class="back-link" href="/">← Back to BigV App</a>
+
+<h1>🦁 BigV — System Architecture</h1>
+<p class="subtitle">How wildlife detection, AI analysis, and community alerts work together</p>
+
+<!-- Legend -->
+<div class="legend">
+  <span class="stage-tag tag-frontend">Frontend (Browser/PWA)</span>
+  <span class="stage-tag tag-backend">Backend (FastAPI)</span>
+  <span class="stage-tag tag-ai">AI / YOLOv8</span>
+  <span class="stage-tag tag-realtime">Real-time (WebSocket)</span>
+  <span class="stage-tag tag-community">Community / Waze</span>
+</div>
+
+<div class="flow">
+
+  <!-- ══ STAGE 1: User opens app ══ -->
+  <div class="stage-row">
+    <div class="stage blue full">
+      <span class="stage-num">STAGE 1</span>
+      <span class="stage-icon">📱</span>
+      <div class="stage-title">User Opens BigV App</div>
+      <div class="stage-desc">
+        Browser loads the PWA. Service worker registers for offline support.
+        App requests camera permission, notification permission, and GPS location.
+      </div>
+      <ul class="detail-list">
+        <li>PWA installs to home screen (Android/iOS)</li>
+        <li>GPS watchPosition() starts tracking coordinates</li>
+        <li>Notification.requestPermission() called</li>
+        <li>Unique client ID generated (e.g. bigv-a3f9x2)</li>
+      </ul>
+      <span class="stage-tag tag-frontend">Frontend</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 2: WebSocket connection ══ -->
+  <div class="stage-row">
+    <div class="stage orange full">
+      <span class="stage-num">STAGE 2</span>
+      <span class="stage-icon">🔌</span>
+      <div class="stage-title">WebSocket Connection Established</div>
+      <div class="stage-desc">
+        App opens a persistent WebSocket to <code>/ws/{clientId}</code>.
+        Server registers the client in the Connection Pool.
+        Server sends back recent sightings and total count.
+      </div>
+      <ul class="detail-list">
+        <li>wss://your-server/ws/bigv-a3f9x2</li>
+        <li>Server sends "connected" message with last 5 sightings</li>
+        <li>Auto-reconnects every 3s if connection drops</li>
+        <li>All connected users share the same live feed</li>
+      </ul>
+      <div class="ws-badge"><span class="ws-dot"></span> LIVE WebSocket</div>
+      <span class="stage-tag tag-realtime">Real-time</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 3: Camera + GPS ══ -->
+  <div class="stage-cols">
+    <div class="stage blue">
+      <span class="stage-num">STAGE 3A</span>
+      <span class="stage-icon">📷</span>
+      <div class="stage-title">Live Camera Capture</div>
+      <div class="stage-desc">
+        User taps Start. Rear camera activates on mobile.
+        Every 1.5 seconds, a frame is captured from the video feed,
+        scaled to 50% and compressed to JPEG.
+      </div>
+      <ul class="detail-list">
+        <li>getUserMedia() — rear cam on mobile</li>
+        <li>Canvas scales frame to 50% for speed</li>
+        <li>JPEG quality 0.7 to reduce bandwidth</li>
+        <li>Frame sent as base64 via WebSocket</li>
+      </ul>
+      <span class="stage-tag tag-frontend">Frontend</span>
+    </div>
+
+    <div class="stage teal">
+      <span class="stage-num">STAGE 3B</span>
+      <span class="stage-icon">📍</span>
+      <div class="stage-title">GPS Coordinates Attached</div>
+      <div class="stage-desc">
+        Every frame sent to the server includes the user's current
+        GPS latitude and longitude. This enables Waze-style proximity alerts.
+      </div>
+      <ul class="detail-list">
+        <li>navigator.geolocation.watchPosition()</li>
+        <li>lat/lng attached to every WebSocket frame message</li>
+        <li>Also attached to image uploads</li>
+        <li>Shown in header badge when acquired</li>
+      </ul>
+      <span class="stage-tag tag-community">Community</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 4: Backend receives frame ══ -->
+  <div class="stage-row">
+    <div class="stage green full">
+      <span class="stage-num">STAGE 4</span>
+      <span class="stage-icon">⚙️</span>
+      <div class="stage-title">Backend Receives & Decodes Frame</div>
+      <div class="stage-desc">
+        FastAPI WebSocket handler receives the JSON message.
+        Base64 image is decoded to a NumPy array using OpenCV.
+        GPS coordinates and location string are extracted.
+      </div>
+      <ul class="detail-list">
+        <li>base64.b64decode() → numpy array → cv2.imdecode()</li>
+        <li>Runs in async event loop (non-blocking)</li>
+        <li>Handles errors gracefully — sends error message back to client</li>
+      </ul>
+      <span class="stage-tag tag-backend">Backend</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 5: AI Detection ══ -->
+  <div class="stage-cols">
+    <div class="stage purple">
+      <span class="stage-num">STAGE 5A</span>
+      <span class="stage-icon">🔍</span>
+      <div class="stage-title">YOLOv8 Detection</div>
+      <div class="stage-desc">
+        WildlifeDetector runs YOLOv8 on the frame in a thread pool
+        (non-blocking). Returns bounding boxes, labels, and confidence scores.
+      </div>
+      <ul class="detail-list">
+        <li>yolov8n.pt — 6MB, fast inference</li>
+        <li>80+ COCO classes + extended wildlife labels</li>
+        <li>Confidence threshold: 0.45 (configurable)</li>
+        <li>Returns: label, confidence, bbox {x1,y1,x2,y2}, priority</li>
+      </ul>
+      <span class="stage-tag tag-ai">AI / YOLOv8</span>
+    </div>
+
+    <div class="stage purple">
+      <span class="stage-num">STAGE 5B</span>
+      <span class="stage-icon">🤖</span>
+      <div class="stage-title">Wildlife Agent Reasoning</div>
+      <div class="stage-desc">
+        WildlifeAgent adds intelligence on top of raw detections.
+        Maintains memory of last 20 detections per camera.
+      </div>
+      <ul class="detail-list">
+        <li>Danger score: 0–100% based on animal type × confidence</li>
+        <li>Behavior inference: group / solitary / foraging</li>
+        <li>Natural language summary generated</li>
+        <li>Safety recommendations per species</li>
+        <li>Repeat sighting detection (territory warning)</li>
+      </ul>
+      <span class="stage-tag tag-ai">AI Agent</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 6: Sighting built ══ -->
+  <div class="stage-row">
+    <div class="stage green full">
+      <span class="stage-num">STAGE 6</span>
+      <span class="stage-icon">📋</span>
+      <div class="stage-title">Sighting Record Created</div>
+      <div class="stage-desc">
+        If animals are detected, a full sighting record is built and stored in memory.
+        Includes all detection data, GPS coordinates, reporter ID, and AI summary.
+      </div>
+      <ul class="detail-list">
+        <li>Unique UUID assigned to each sighting</li>
+        <li>Alert level: critical / high / medium / low (based on confidence)</li>
+        <li>GPS lat/lng stored for map display</li>
+        <li>reporter_id stored to distinguish "your" vs "community" sightings</li>
+        <li>Stored in in-memory list (last 1 hour queryable via /community-sightings)</li>
+      </ul>
+      <span class="stage-tag tag-backend">Backend</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 7: Broadcast ══ -->
+  <div class="divider-label">📡 Broadcast to ALL connected users simultaneously</div>
+
+  <div class="broadcast-row">
+    <div class="stage orange">
+      <span class="stage-icon">📊</span>
+      <div class="stage-title">Analysis Result</div>
+      <div class="stage-desc">Sent back to the detecting user only. Shows danger score, bounding boxes, behavior.</div>
+      <div class="ws-badge"><span class="ws-dot"></span> WS → You</div>
+    </div>
+
+    <div class="stage teal">
+      <span class="stage-icon">👥</span>
+      <div class="stage-title">Community Sighting</div>
+      <div class="stage-desc">Lightweight broadcast (no image) sent to ALL users. Triggers map pin + nearby banner.</div>
+      <div class="ws-badge"><span class="ws-dot"></span> WS → Everyone</div>
+    </div>
+
+    <div class="stage orange">
+      <span class="stage-icon">🚨</span>
+      <div class="stage-title">Alert Event</div>
+      <div class="stage-desc">Alert Manager fires per-animal alerts with cooldown. Sent to all clients.</div>
+      <div class="ws-badge"><span class="ws-dot"></span> WS → Everyone</div>
+    </div>
+
+    <div class="stage green">
+      <span class="stage-icon">💬</span>
+      <div class="stage-title">Slack (Optional)</div>
+      <div class="stage-desc">Critical/high alerts sent to Slack webhook if SLACK_WEBHOOK_URL is set.</div>
+      <span class="stage-tag tag-backend">Backend</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 8: Frontend receives ══ -->
+  <div class="divider-label">📱 Each user's app receives and renders</div>
+
+  <div class="stage-cols-3">
+    <div class="stage blue">
+      <span class="stage-icon">🗺</span>
+      <div class="stage-title">Map Pin Added</div>
+      <div class="stage-desc">
+        New Leaflet.js pin appears instantly on the Community Map tab.
+        Color = alert level. Popup shows animal, location, time ago.
+      </div>
+      <ul class="detail-list">
+        <li>🔴 Critical — large red pin</li>
+        <li>🟠 High — orange pin</li>
+        <li>🟡 Medium — yellow pin</li>
+        <li>🟢 Low — green pin</li>
+        <li>⚪ Your own sightings — solid fill</li>
+      </ul>
+      <span class="stage-tag tag-community">Map</span>
+    </div>
+
+    <div class="stage teal">
+      <span class="stage-icon">🔔</span>
+      <div class="stage-title">Waze Nearby Banner</div>
+      <div class="stage-desc">
+        If another user's sighting is within 10km of your GPS location,
+        a sliding banner appears at the top of your screen.
+      </div>
+      <ul class="detail-list">
+        <li>Shows animal + distance (e.g. "2.3 km away")</li>
+        <li>Auto-dismisses after 8 seconds</li>
+        <li>Phone vibrates (100ms pattern)</li>
+        <li>Only fires for OTHER users' sightings</li>
+      </ul>
+      <span class="stage-tag tag-community">Waze-style</span>
+    </div>
+
+    <div class="stage blue">
+      <span class="stage-icon">📲</span>
+      <div class="stage-title">Push Notification</div>
+      <div class="stage-desc">
+        Browser push notification fires for all alerts.
+        Works even when app is in background (if PWA installed).
+      </div>
+      <ul class="detail-list">
+        <li>Shows animal name + location</li>
+        <li>Confidence percentage shown</li>
+        <li>Tapping opens the app</li>
+        <li>Critical alerts: phone vibrates 3× pattern</li>
+      </ul>
+      <span class="stage-tag tag-frontend">Notification</span>
+    </div>
+  </div>
+
+  <div class="arrow-down"><span>▼</span></div>
+
+  <!-- ══ STAGE 9: Sighting card ══ -->
+  <div class="stage-row">
+    <div class="stage blue full">
+      <span class="stage-num">STAGE 9</span>
+      <span class="stage-icon">🃏</span>
+      <div class="stage-title">Sighting Card Added to Alerts Tab</div>
+      <div class="stage-desc">
+        Every sighting appears as a card in the Alerts & Sightings tab.
+        Cards show the source (your detection vs community report), thumbnail, GPS coords, and time.
+      </div>
+      <ul class="detail-list">
+        <li>📷 You — blue badge for your own detections</li>
+        <li>👥 Community — purple badge for other users' reports</li>
+        <li>Thumbnail image shown (your detections only)</li>
+        <li>GPS coordinates shown if available</li>
+        <li>Tap card to see full detail + recommendations</li>
+      </ul>
+      <span class="stage-tag tag-frontend">Frontend</span>
+    </div>
+  </div>
+
+  <!-- ══ EXTRA: Community Sightings API ══ -->
+  <div class="divider-label">🌐 REST API — Available to any client</div>
+
+  <div class="stage-cols">
+    <div class="stage green">
+      <span class="stage-icon">📡</span>
+      <div class="stage-title">GET /community-sightings</div>
+      <div class="stage-desc">
+        Returns all sightings from the last 60 minutes with GPS coordinates.
+        Lightweight — no images included. Used by the map on page load and every 30s refresh.
+      </div>
+      <ul class="detail-list">
+        <li>Filters by timestamp (last 1 hour)</li>
+        <li>Returns: animals, location, lat, lng, alert_level, timestamp</li>
+        <li>Used to populate map on tab open</li>
+      </ul>
+      <span class="stage-tag tag-backend">REST API</span>
+    </div>
+
+    <div class="stage green">
+      <span class="stage-icon">❤️</span>
+      <div class="stage-title">GET /health</div>
+      <div class="stage-desc">
+        Health check endpoint. Returns server status, model name, connected clients, and total sightings.
+        Polled every 15 seconds by the frontend.
+      </div>
+      <ul class="detail-list">
+        <li>status, detector model name</li>
+        <li>connected_clients count</li>
+        <li>total_sightings count</li>
+        <li>Used to update stats bar</li>
+      </ul>
+      <span class="stage-tag tag-backend">REST API</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;margin-top:40px;color:var(--muted);font-size:0.75rem">
+  BigV — Wildlife Spotter · Made with Bob · <a href="/" style="color:var(--blue)">Open App</a>
+</div>
+
+</body>
+</html>
