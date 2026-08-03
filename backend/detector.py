@@ -32,10 +32,13 @@ COCO_ANIMAL_CLASSES = {
 # African animal.  We remap to the most probable actual species so the UI
 # shows a useful label instead of a generic COCO class.
 # Only applied when no specialised Roboflow model is loaded.
+#
+# NOTE: "sheep" is intentionally NOT remapped — COCO uses it for both
+# warthogs AND gazelles (similar size/shape).  A wrong remap (e.g. sheep→gazelle)
+# would misidentify warthogs.  Set ROBOFLOW_API_KEY for accurate species detection.
 COCO_AFRICAN_REMAP = {
     "horse":  "antelope",   # antelopes/impalas look like horses to COCO
     "cow":    "buffalo",    # buffalo/wildebeest misidentified as cow
-    "sheep":  "gazelle",    # gazelles misidentified as sheep
     "dog":    "hyena",      # hyenas misidentified as dogs
     "cat":    "cheetah",    # cheetah/leopard misidentified as cat
 }
