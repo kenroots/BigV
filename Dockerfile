@@ -35,9 +35,8 @@ COPY .env.example .env
 # Create models + logs directories
 RUN mkdir -p /app/models /app/logs
 
-# Pre-download YOLOv8n weights as fallback.
-# The Roboflow African wildlife model is downloaded at container startup
-# using the ROBOFLOW_API_KEY runtime environment variable set in Railway.
+# Pre-download YOLO-World + YOLOv8n weights at build time
+RUN python -c "from ultralytics import YOLOWorld; YOLOWorld('yolov8s-worldv2.pt')"
 RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 
 WORKDIR /app/backend

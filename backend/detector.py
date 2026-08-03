@@ -101,30 +101,29 @@ class WildlifeDetector:
         self._load_model(self.custom_model_path)
 
     def _load_model(self, model_path: Optional[str]):
-        """Try Roboflow Inference SDK first, then local YOLOv8, then OpenCV DNN."""
+        """Try YOLO-World first (open-vocab African wildlife), then fall back."""
 
-        # ── Priority 1: Roboflow Inference SDK (serverless — no model file needed) ──
-        api_key    = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        rf_project = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-xd6ml")
-        rf_version = os.getenv("ROBOFLOW_VERSION", "1")
-        if api_key:
-            try:
-                from inference_sdk import InferenceHTTPClient
-                self.rf_client   = InferenceHTTPClient(
-                    api_url="https://serverless.roboflow.com",
-                    api_key=api_key,
-                )
-                self.rf_model_id = f"{rf_project}/{rf_version}"
-                self.model_name  = f"Roboflow ({self.rf_model_id})"
-                self.backend     = "roboflow_inference"
-                logger.info(f"Loaded model: {self.model_name}")
-                return
-            except ImportError:
-                logger.warning("inference-sdk not installed — falling back to local YOLOv8")
-            except Exception as e:
-                logger.warning(f"Roboflow Inference init failed: {e} — falling back")
+        # ── Priority 1: YOLO-World open-vocabulary model ──────────────────────
+        # Detects African species by name — no retraining needed
+        try:
+            from ultralytics import YOLOWorld
+            world_model = YOLOWorld("yolov8s-worldv2.pt")
+            world_model.set_classes([
+                "lion", "leopard", "cheetah", "elephant", "rhinoceros",
+                "hippopotamus", "buffalo", "wildebeest", "zebra", "giraffe",
+                "warthog", "topi", "gazelle", "impala", "antelope",
+                "hyena", "vulture", "ostrich", "crocodile", "wild dog",
+                "gorilla", "chimpanzee", "baboon",
+            ])
+            self.model      = world_model
+            self.model_name = "YOLOv8-World (African wildlife)"
+            self.backend    = "ultralytics"
+            logger.info(f"Loaded model: {self.model_name}")
+            return
+        except Exception as e:
+            logger.warning(f"YOLO-World load failed: {e} — falling back to yolov8n")
 
-        # ── Priority 2: local YOLOv8 (ultralytics) ────────────────────────────
+        # ── Priority 2: local YOLOv8n (COCO fallback) ─────────────────────────
         try:
             from ultralytics import YOLO
             # Priority: custom path > env var > default
@@ -184,9 +183,7 @@ class WildlifeDetector:
         Run detection on a frame.
         Returns list of dicts: {label, confidence, bbox, priority}
         """
-        if self.backend == "roboflow_inference":
-            return self._detect_roboflow(frame)
-        elif self.backend == "ultralytics":
+        if self.backend == "ultralytics":
             return self._detect_ultralytics(frame)
         elif self.backend == "opencv_dnn":
             return self._detect_opencv_dnn(frame)
