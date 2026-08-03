@@ -159,6 +159,19 @@ async def health():
     }
 
 
+@app.get("/debug/world")
+async def debug_world():
+    """Test YOLO-World load in isolation — surfaces the exact exception if it fails."""
+    import traceback
+    try:
+        from ultralytics import YOLOWorld
+        m = YOLOWorld("yolov8s-worldv2.pt")
+        m.set_classes(["thomson's gazelle", "gazelle", "lion"])
+        return {"status": "ok", "model": str(m.model_name if hasattr(m, 'model_name') else type(m).__name__)}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
 @app.get("/debug/model")
 async def debug_model():
     """Diagnostic endpoint — shows detector state, Roboflow env vars, and live download test."""
