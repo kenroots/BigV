@@ -77,17 +77,16 @@ class WildlifeDetector:
         try:
             from ultralytics import YOLO
             # Priority: custom path > env var > default
-            # Support African wildlife models like "african-wildlife-yolov8.pt"
             path = model_path or "yolov8n.pt"  # nano model — fast
-            
-            # Check if custom model exists in models directory
+
+            # Check models directory — Roboflow download lands here first
             models_dir = Path(__file__).parent.parent / "models"
             custom_paths = [
-                models_dir / "african-wildlife-yolov8.pt",
+                models_dir / "african-wildlife-yolov8.pt",  # Roboflow download target
                 models_dir / "wildlife-yolov8.pt",
                 models_dir / path,
             ]
-            
+
             for custom_path in custom_paths:
                 if custom_path.exists():
                     path = str(custom_path)

@@ -10,6 +10,7 @@ python-multipart>=0.0.9
 opencv-python-headless>=4.9.0
 numpy>=1.26.0
 ultralytics>=8.1.0        # YOLOv8 — best accuracy (optional, falls back to OpenCV DNN)
+roboflow>=1.1.0           # Download African wildlife models from Roboflow Universe
 
 # HTTP client (for Slack alerts)
 aiohttp>=3.9.0
