@@ -129,6 +129,91 @@ ANIMAL_INFO = {
     },
 }
 
+# ─── Extended African species fact cards ──────────────────────────────────────
+# Covers animals the COCO remap and Roboflow model can now correctly identify
+ANIMAL_INFO.update({
+    "antelope": {
+        "swahili": "Swala / Paa",
+        "habitat": "Open savanna, grassland, bushveld",
+        "diet": "Herbivore — grass, leaves, shrubs",
+        "behavior": "Highly alert, fast runners. Form large herds for protection.",
+        "photo_tip": "Fast shutter speed (1/1000s+). Shoot at eye level for best impact.",
+        "big_five": False,
+    },
+    "impala": {
+        "swahili": "Swala Pala",
+        "habitat": "Open woodland, savanna near water",
+        "diet": "Herbivore — grass and browse",
+        "behavior": "Most common antelope. Males territorial. Explosive leaps when alarmed.",
+        "photo_tip": "Golden hour light brings out their reddish coat beautifully.",
+        "big_five": False,
+    },
+    "gazelle": {
+        "swahili": "Swala",
+        "habitat": "Open grassland, semi-arid savanna",
+        "diet": "Herbivore — grass, leaves",
+        "behavior": "Famous for 'stotting' (high leaping) to signal fitness to predators.",
+        "photo_tip": "Include the golden grass for context. Use burst mode during sprints.",
+        "big_five": False,
+    },
+    "springbok": {
+        "swahili": "Springboko",
+        "habitat": "Open semi-arid savanna, Kalahari",
+        "diet": "Herbivore — grass and browse",
+        "behavior": "National animal of South Africa. Pronks (leaps) when excited.",
+        "photo_tip": "Capture the pronking leap — use high burst rate.",
+        "big_five": False,
+    },
+    "kudu": {
+        "swahili": "Tandala",
+        "habitat": "Woodland, bushveld, rocky hills",
+        "diet": "Herbivore — leaves, fruit, grass",
+        "behavior": "Males have spectacular spiral horns. Excellent jumpers.",
+        "photo_tip": "Frame the spiral horns against the sky for a dramatic shot.",
+        "big_five": False,
+    },
+    "warthog": {
+        "swahili": "Ngiri",
+        "habitat": "Open grassland, savanna",
+        "diet": "Herbivore — roots, grass, tubers",
+        "behavior": "Runs with tail upright. Kneels to graze. Lions' favourite snack.",
+        "photo_tip": "Low angle shot emphasises their comical tusks and warts.",
+        "big_five": False,
+    },
+    "wild dog": {
+        "swahili": "Mbwa Mwitu",
+        "habitat": "Open savanna, woodland",
+        "diet": "Carnivore — impala, wildebeest, gazelle",
+        "behavior": "Most successful African predator (~80% hunt success). Endangered.",
+        "photo_tip": "Extremely rare — photograph immediately. Report to rangers.",
+        "big_five": False,
+    },
+    "hyena": {
+        "swahili": "Fisi",
+        "habitat": "Savanna, grassland, woodland",
+        "diet": "Carnivore/scavenger — kills own prey and steals from lions",
+        "behavior": "Highly intelligent. Complex social clans. Powerful bone-crushing jaws.",
+        "photo_tip": "Dawn/dusk best. Capture their spotted coat in low golden light.",
+        "big_five": False,
+    },
+    "ostrich": {
+        "swahili": "Mbuni",
+        "habitat": "Open savanna, semi-arid grassland",
+        "diet": "Omnivore — seeds, plants, insects",
+        "behavior": "Largest bird, cannot fly. Fastest running bird (70 km/h). Powerful kick.",
+        "photo_tip": "Wide angle to show scale. Males have striking black and white plumage.",
+        "big_five": False,
+    },
+    "jackal": {
+        "swahili": "Bweha",
+        "habitat": "Savanna, open woodland",
+        "diet": "Omnivore — small animals, fruit, carrion",
+        "behavior": "Monogamous pairs. Often scavenges near lion kills.",
+        "photo_tip": "Capture at kill sites — fascinating interaction with vultures.",
+        "big_five": False,
+    },
+})
+
 # ─── Safari park presets with common animals ──────────────────────────────────
 SAFARI_PARKS = {
     "serengeti": {

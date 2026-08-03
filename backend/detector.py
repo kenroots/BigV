@@ -27,16 +27,33 @@ COCO_ANIMAL_CLASSES = {
     23: "giraffe",
 }
 
+# When the COCO model (yolov8n.pt) sees one of these labels in an African
+# wildlife context it is almost certainly misidentifying a similar-looking
+# African animal.  We remap to the most probable actual species so the UI
+# shows a useful label instead of a generic COCO class.
+# Only applied when no specialised Roboflow model is loaded.
+COCO_AFRICAN_REMAP = {
+    "horse":  "antelope",   # antelopes/impalas look like horses to COCO
+    "cow":    "buffalo",    # buffalo/wildebeest misidentified as cow
+    "sheep":  "gazelle",    # gazelles misidentified as sheep
+    "dog":    "hyena",      # hyenas misidentified as dogs
+    "cat":    "cheetah",    # cheetah/leopard misidentified as cat
+}
+
 # Extended wildlife labels (used with YOLO world / custom models)
 WILDLIFE_LABELS = [
     "lion", "tiger", "leopard", "cheetah", "jaguar", "panther",
     "wolf", "fox", "coyote", "hyena",
     "elephant", "rhinoceros", "hippopotamus", "giraffe", "zebra",
-    "buffalo", "wildebeest", "antelope", "gazelle", "deer", "moose", "elk",
+    "buffalo", "wildebeest", "antelope", "gazelle", "impala", "springbok",
+    "kudu", "eland", "oryx", "gemsbok", "hartebeest", "topi", "sable",
+    "deer", "moose", "elk",
+    "warthog", "wild dog", "african wild dog", "painted dog",
+    "mongoose", "meerkat", "jackal",
     "bear", "grizzly bear", "polar bear", "black bear",
     "gorilla", "chimpanzee", "baboon", "monkey",
     "crocodile", "alligator", "snake", "lizard", "komodo dragon",
-    "eagle", "hawk", "owl", "vulture", "flamingo", "pelican",
+    "eagle", "hawk", "owl", "vulture", "flamingo", "pelican", "ostrich",
     "shark", "whale", "dolphin", "seal", "walrus",
     "kangaroo", "koala", "wombat",
     "cat", "dog", "horse", "cow", "sheep", "bird",
@@ -52,6 +69,14 @@ ALERT_PRIORITY = {
     "snake": "high", "komodo dragon": "high",
     "gorilla": "high", "chimpanzee": "medium",
     "shark": "critical",
+    "wild dog": "high", "african wild dog": "high", "painted dog": "high",
+    "hyena": "high",
+    "warthog": "medium",
+    "buffalo": "high", "wildebeest": "low",
+    "antelope": "low", "gazelle": "low", "impala": "low", "springbok": "low",
+    "kudu": "low", "eland": "low", "oryx": "low", "gemsbok": "low",
+    "hartebeest": "low", "topi": "low", "sable": "low",
+    "ostrich": "low", "mongoose": "low", "meerkat": "low", "jackal": "low",
     "default": "low",
 }
 
@@ -153,6 +178,12 @@ class WildlifeDetector:
             # Only keep animals
             if not self._is_animal(label):
                 continue
+
+            # When running on the generic COCO model (yolov8n.pt), remap
+            # domestic/generic labels to their African wildlife equivalents.
+            # Specialised Roboflow models already output the correct labels.
+            if "yolov8n" in self.model_name or "yolov8s" in self.model_name:
+                label = COCO_AFRICAN_REMAP.get(label, label)
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append({
