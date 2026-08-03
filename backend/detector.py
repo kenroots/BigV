@@ -87,21 +87,44 @@ ALERT_PRIORITY = {
 class WildlifeDetector:
     """
     Animal detector supporting:
-    1. YOLOv8 (ultralytics) — best accuracy
-    2. OpenCV DNN with COCO model — fallback
+    1. Roboflow Inference SDK (serverless API) — best African wildlife accuracy
+    2. YOLOv8 (ultralytics) local model — fallback
+    3. OpenCV DNN with COCO model — last resort
+    4. Mock detector — demo mode
     """
 
     def __init__(self, model_path: Optional[str] = None, confidence_threshold: float = 0.45):
         self.confidence_threshold = confidence_threshold
         self.model = None
         self.model_name = "none"
-        # Support custom model path from environment variable
         self.custom_model_path = os.getenv("WILDLIFE_MODEL_PATH", model_path)
         self._load_model(self.custom_model_path)
 
     def _load_model(self, model_path: Optional[str]):
-        """Try loading YOLOv8, fall back to OpenCV DNN."""
-        # Try ultralytics YOLOv8
+        """Try Roboflow Inference SDK first, then local YOLOv8, then OpenCV DNN."""
+
+        # ── Priority 1: Roboflow Inference SDK (serverless — no model file needed) ──
+        api_key    = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        rf_project = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-qgiwz")
+        rf_version = os.getenv("ROBOFLOW_VERSION", "24")
+        if api_key:
+            try:
+                from inference_sdk import InferenceHTTPClient
+                self.rf_client   = InferenceHTTPClient(
+                    api_url="https://serverless.roboflow.com",
+                    api_key=api_key,
+                )
+                self.rf_model_id = f"{rf_project}/{rf_version}"
+                self.model_name  = f"Roboflow ({self.rf_model_id})"
+                self.backend     = "roboflow_inference"
+                logger.info(f"Loaded model: {self.model_name}")
+                return
+            except ImportError:
+                logger.warning("inference-sdk not installed — falling back to local YOLOv8")
+            except Exception as e:
+                logger.warning(f"Roboflow Inference init failed: {e} — falling back")
+
+        # ── Priority 2: local YOLOv8 (ultralytics) ────────────────────────────
         try:
             from ultralytics import YOLO
             # Priority: custom path > env var > default
@@ -161,12 +184,49 @@ class WildlifeDetector:
         Run detection on a frame.
         Returns list of dicts: {label, confidence, bbox, priority}
         """
-        if self.backend == "ultralytics":
+        if self.backend == "roboflow_inference":
+            return self._detect_roboflow(frame)
+        elif self.backend == "ultralytics":
             return self._detect_ultralytics(frame)
         elif self.backend == "opencv_dnn":
             return self._detect_opencv_dnn(frame)
         else:
             return self._detect_mock(frame)
+
+    def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
+        """Send frame to Roboflow serverless inference API."""
+        import cv2 as _cv2, base64, tempfile, os as _os
+        # Encode frame as JPEG and send to Roboflow
+        _, buf = _cv2.imencode(".jpg", frame)
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(buf.tobytes())
+            tmp_path = tmp.name
+        try:
+            result = self.rf_client.infer(tmp_path, model_id=self.rf_model_id)
+        finally:
+            _os.unlink(tmp_path)
+
+        detections = []
+        for pred in result.get("predictions", []):
+            conf  = float(pred.get("confidence", 0))
+            if conf < self.confidence_threshold:
+                continue
+            label = pred.get("class", "unknown").lower()
+            if not self._is_animal(label):
+                continue
+            # Roboflow returns centre x/y + width/height
+            cx = pred.get("x", 0); cy = pred.get("y", 0)
+            bw = pred.get("width", 0); bh = pred.get("height", 0)
+            detections.append({
+                "label":      label,
+                "confidence": round(conf, 3),
+                "bbox": {
+                    "x1": int(cx - bw / 2), "y1": int(cy - bh / 2),
+                    "x2": int(cx + bw / 2), "y2": int(cy + bh / 2),
+                },
+                "priority": ALERT_PRIORITY.get(label, ALERT_PRIORITY["default"]),
+            })
+        return detections
 
     def _detect_ultralytics(self, frame: np.ndarray) -> list[dict]:
         results = self.model(frame, verbose=False)[0]

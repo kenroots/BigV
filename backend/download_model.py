@@ -34,7 +34,7 @@ def download() -> bool:
     api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
     workspace = os.getenv("ROBOFLOW_WORKSPACE", "tian-jian-4ywmu")
     project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-qgiwz")
-    version   = os.getenv("ROBOFLOW_VERSION",   "1")
+    version   = os.getenv("ROBOFLOW_VERSION",   "24")
 
     if not api_key:
         logger.warning("ROBOFLOW_API_KEY not set — skipping Roboflow download.")

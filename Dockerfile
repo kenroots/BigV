@@ -24,7 +24,8 @@ RUN pip install --no-cache-dir \
     pydantic>=2.6.0 \
     python-dotenv>=1.0.0 \
     ultralytics>=8.0.0 \
-    roboflow>=1.1.0
+    roboflow>=1.1.0 \
+    "inference-sdk>=0.9.0"
 
 # Copy source files (needed before model download so download_model.py is available)
 COPY backend/ ./backend/
