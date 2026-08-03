@@ -27,20 +27,20 @@ COCO_ANIMAL_CLASSES = {
     23: "giraffe",
 }
 
-# When the COCO model (yolov8n.pt) sees one of these labels in an African
-# wildlife context it is almost certainly misidentifying a similar-looking
-# African animal.  We remap to the most probable actual species so the UI
-# shows a useful label instead of a generic COCO class.
-# Only applied when no specialised Roboflow model is loaded.
-#
-# NOTE: "sheep" is intentionally NOT remapped — COCO uses it for both
-# warthogs AND gazelles (similar size/shape).  A wrong remap (e.g. sheep→gazelle)
-# would misidentify warthogs.  Set ROBOFLOW_API_KEY for accurate species detection.
+# Label remaps for the COCO fallback model (yolov8n.pt).
+# Only applied when no specialised model is loaded.
+# NOTE: "sheep" intentionally NOT remapped — matches both warthog and gazelle.
 COCO_AFRICAN_REMAP = {
     "horse":  "antelope",   # antelopes/impalas look like horses to COCO
     "cow":    "buffalo",    # buffalo/wildebeest misidentified as cow
     "dog":    "hyena",      # hyenas misidentified as dogs
     "cat":    "cheetah",    # cheetah/leopard misidentified as cat
+}
+
+# Label remaps for the Roboflow model wildlife-detection-qgiwz/24.
+# This model mislabels certain African species — correct them here.
+ROBOFLOW_LABEL_REMAP = {
+    "deer": "giraffe",      # model labels giraffe as deer (tall, long-neck shape confusion)
 }
 
 # Extended wildlife labels (used with YOLO world / custom models)
@@ -211,8 +211,13 @@ class WildlifeDetector:
             conf  = float(pred.get("confidence", 0))
             if conf < self.confidence_threshold:
                 continue
-            label = pred.get("class", "unknown").lower()
+            raw_label = pred.get("class", "unknown").lower()
+            # Apply model-specific label corrections
+            label = ROBOFLOW_LABEL_REMAP.get(raw_label, raw_label)
+            if raw_label != label:
+                logger.info(f"Roboflow label remap: '{raw_label}' → '{label}'")
             if not self._is_animal(label):
+                logger.debug(f"Roboflow skipped non-animal label: '{label}'")
                 continue
             # Roboflow returns centre x/y + width/height
             cx = pred.get("x", 0); cy = pred.get("y", 0)
