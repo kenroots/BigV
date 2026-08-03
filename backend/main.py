@@ -170,7 +170,7 @@ async def debug_model():
     api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
     workspace = os.getenv("ROBOFLOW_WORKSPACE", "tian-jian-4ywmu")
     project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-qgiwz")
-    version   = os.getenv("ROBOFLOW_VERSION",   "2")
+    version   = os.getenv("ROBOFLOW_VERSION",   "1")
 
     # Probe the Roboflow API right now so we can report the exact error
     api_probe = "not tested"
