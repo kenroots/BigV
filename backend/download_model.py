@@ -25,18 +25,18 @@ logger = logging.getLogger("bigv.download_model")
 MODELS_DIR = Path(__file__).parent.parent / "models"
 MODEL_DEST = MODELS_DIR / "african-wildlife-yolov8.pt"
 
-# Roboflow project coordinates — override via env vars
-RF_API_KEY   = os.getenv("ROBOFLOW_API_KEY", "")
-RF_WORKSPACE = os.getenv("ROBOFLOW_WORKSPACE", "african-wildlife-mwx4d")
-RF_PROJECT   = os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-8csiv")
-RF_VERSION   = int(os.getenv("ROBOFLOW_VERSION", "1"))
-
 
 def download():
-    if not RF_API_KEY:
+    # Read env vars inside the function so Railway runtime vars are visible
+    api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
+    workspace = os.getenv("ROBOFLOW_WORKSPACE", "african-wildlife-mwx4d")
+    project   = os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-8csiv")
+    version   = int(os.getenv("ROBOFLOW_VERSION", "1"))
+
+    if not api_key:
         logger.warning(
             "ROBOFLOW_API_KEY not set — skipping Roboflow download. "
-            "Set it in Railway environment variables or .env to enable African wildlife detection."
+            "Set it in Railway environment variables to enable African wildlife detection."
         )
         return False
 
@@ -50,20 +50,18 @@ def download():
         logger.error("roboflow package not installed. Run: pip install roboflow")
         return False
 
-    logger.info(f"Downloading Roboflow model: {RF_WORKSPACE}/{RF_PROJECT} v{RF_VERSION} ...")
+    logger.info(f"Downloading Roboflow model: {workspace}/{project} v{version} ...")
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
-        rf = Roboflow(api_key=RF_API_KEY)
-        project = rf.workspace(RF_WORKSPACE).project(RF_PROJECT)
-        version = project.version(RF_VERSION)
-        # Download as YOLOv8 PyTorch format
-        dataset = version.download("yolov8", location=str(MODELS_DIR / "roboflow_tmp"))
+        rf = Roboflow(api_key=api_key)
+        dataset = rf.workspace(workspace).project(project).version(version).download(
+            "yolov8", location=str(MODELS_DIR / "roboflow_tmp")
+        )
 
         # Roboflow saves weights to <location>/weights/best.pt
         best_pt = Path(dataset.location) / "weights" / "best.pt"
         if not best_pt.exists():
-            # Some versions put it directly
             best_pt = Path(dataset.location) / "best.pt"
 
         if best_pt.exists():

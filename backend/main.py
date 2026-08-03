@@ -153,6 +153,25 @@ async def health():
     }
 
 
+@app.get("/debug/model")
+async def debug_model():
+    """Diagnostic endpoint — shows detector state and Roboflow env vars."""
+    from pathlib import Path
+    models_dir = Path(__file__).parent.parent / "models"
+    model_files = [f.name for f in models_dir.glob("*.pt")] if models_dir.exists() else []
+    api_key = os.getenv("ROBOFLOW_API_KEY", "")
+    return {
+        "detector":         detector.model_name,
+        "backend":          detector.backend,
+        "models_dir":       str(models_dir),
+        "model_files":      model_files,
+        "roboflow_api_key": "SET" if api_key else "NOT SET",
+        "roboflow_workspace": os.getenv("ROBOFLOW_WORKSPACE", "african-wildlife-mwx4d"),
+        "roboflow_project":   os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-8csiv"),
+        "roboflow_version":   os.getenv("ROBOFLOW_VERSION",   "1"),
+    }
+
+
 @app.get("/sightings")
 async def get_sightings(limit: int = 50):
     return {"sightings": sightings[-limit:], "total": len(sightings)}
