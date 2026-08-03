@@ -34,22 +34,12 @@ COPY .env.example .env
 # Create models + logs directories
 RUN mkdir -p /app/models /app/logs
 
-# Download African wildlife model from Roboflow (requires ROBOFLOW_API_KEY build arg).
-# Falls back to yolov8n.pt (COCO) gracefully if key is not provided.
-ARG ROBOFLOW_API_KEY=""
-ARG ROBOFLOW_WORKSPACE="african-wildlife-mwx4d"
-ARG ROBOFLOW_PROJECT="african-wildlife-8csiv"
-ARG ROBOFLOW_VERSION="1"
-ENV ROBOFLOW_API_KEY=${ROBOFLOW_API_KEY} \
-    ROBOFLOW_WORKSPACE=${ROBOFLOW_WORKSPACE} \
-    ROBOFLOW_PROJECT=${ROBOFLOW_PROJECT} \
-    ROBOFLOW_VERSION=${ROBOFLOW_VERSION}
+# Pre-download YOLOv8n weights as fallback.
+# The Roboflow African wildlife model is downloaded at container startup
+# using the ROBOFLOW_API_KEY runtime environment variable set in Railway.
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 
 WORKDIR /app/backend
-RUN python download_model.py || echo "Roboflow download skipped — will use YOLOv8n fallback"
-
-# Pre-download YOLOv8n weights as fallback (used when no Roboflow model present)
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 
 # Expose port
 EXPOSE 8000
