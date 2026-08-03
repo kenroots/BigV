@@ -40,7 +40,8 @@ COCO_AFRICAN_REMAP = {
 # Label remaps for the Roboflow model wildlife-detection-qgiwz/24.
 # This model mislabels certain African species — correct them here.
 ROBOFLOW_LABEL_REMAP = {
-    "deer": "giraffe",      # model labels giraffe as deer (tall, long-neck shape confusion)
+    "deer": "giraffe",      # giraffe → deer (tall long-neck confusion)
+    "dog":  "ostrich",      # ostrich → dog (long legs, upright posture confusion)
 }
 
 # Extended wildlife labels (used with YOLO world / custom models)
