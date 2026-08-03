@@ -43,23 +43,34 @@ COCO_AFRICAN_REMAP = {
 # These remaps are a temporary band-aid only.
 ROBOFLOW_LABEL_REMAP: dict[str, str] = {}
 
-# Extended wildlife labels (used with YOLO world / custom models)
+# Extended wildlife labels — all labels YOLO-World may return
 WILDLIFE_LABELS = [
-    "lion", "tiger", "leopard", "cheetah", "jaguar", "panther",
-    "wolf", "fox", "coyote", "hyena",
-    "elephant", "rhinoceros", "hippopotamus", "giraffe", "zebra",
-    "buffalo", "wildebeest", "antelope", "gazelle", "impala", "springbok",
-    "kudu", "eland", "oryx", "gemsbok", "hartebeest", "topi", "sable",
-    "deer", "moose", "elk",
-    "warthog", "wild dog", "african wild dog", "painted dog",
-    "mongoose", "meerkat", "jackal",
+    # Big cats
+    "lion", "african lion", "tiger", "leopard", "cheetah", "jaguar", "panther",
+    # Canids & hyenas
+    "wolf", "fox", "coyote", "hyena", "spotted hyena", "african wild dog",
+    "wild dog", "painted dog", "jackal",
+    # Large herbivores
+    "elephant", "african elephant", "rhinoceros", "black rhinoceros",
+    "hippopotamus", "giraffe", "reticulated giraffe", "zebra", "plains zebra",
+    # Bovids & antelope
+    "buffalo", "african buffalo", "wildebeest", "antelope", "gazelle",
+    "thomson gazelle", "grant gazelle", "impala", "springbok",
+    "kudu", "eland", "common eland", "oryx", "gemsbok", "hartebeest",
+    "topi", "sable",
+    # Other mammals
+    "warthog", "mongoose", "meerkat",
+    "gorilla", "chimpanzee", "baboon", "monkey", "colobus monkey",
     "bear", "grizzly bear", "polar bear", "black bear",
-    "gorilla", "chimpanzee", "baboon", "monkey",
     "crocodile", "alligator", "snake", "lizard", "komodo dragon",
-    "eagle", "hawk", "owl", "vulture", "flamingo", "pelican", "ostrich",
+    # Birds
+    "eagle", "hawk", "owl", "vulture", "flamingo", "pelican",
+    "ostrich", "somali ostrich", "secretary bird",
+    # Marine
     "shark", "whale", "dolphin", "seal", "walrus",
-    "kangaroo", "koala", "wombat",
+    # COCO fallback labels (kept so _is_animal() passes them through)
     "cat", "dog", "horse", "cow", "sheep", "bird",
+    "deer", "kangaroo", "koala", "wombat",
 ]
 
 # Alert priority by animal type
@@ -73,13 +84,20 @@ ALERT_PRIORITY = {
     "gorilla": "high", "chimpanzee": "medium",
     "shark": "critical",
     "wild dog": "high", "african wild dog": "high", "painted dog": "high",
-    "hyena": "high",
+    "hyena": "high", "spotted hyena": "high",
     "warthog": "medium",
-    "buffalo": "high", "wildebeest": "low",
-    "antelope": "low", "gazelle": "low", "impala": "low", "springbok": "low",
-    "kudu": "low", "eland": "low", "oryx": "low", "gemsbok": "low",
-    "hartebeest": "low", "topi": "low", "sable": "low",
-    "ostrich": "low", "mongoose": "low", "meerkat": "low", "jackal": "low",
+    "buffalo": "high", "african buffalo": "high",
+    "wildebeest": "low", "topi": "low",
+    "antelope": "low", "gazelle": "low", "thomson gazelle": "low",
+    "grant gazelle": "low", "impala": "low", "springbok": "low",
+    "kudu": "low", "eland": "low", "common eland": "low",
+    "oryx": "low", "gemsbok": "low", "hartebeest": "low", "sable": "low",
+    "ostrich": "low", "somali ostrich": "low", "secretary bird": "low",
+    "mongoose": "low", "meerkat": "low", "jackal": "low",
+    "colobus monkey": "low", "baboon": "medium",
+    "plains zebra": "low", "reticulated giraffe": "low",
+    "african lion": "critical", "african elephant": "high",
+    "black rhinoceros": "high",
     "default": "low",
 }
 
@@ -109,11 +127,23 @@ class WildlifeDetector:
             from ultralytics import YOLOWorld
             world_model = YOLOWorld("yolov8s-worldv2.pt")
             world_model.set_classes([
-                "lion", "leopard", "cheetah", "elephant", "rhinoceros",
-                "hippopotamus", "buffalo", "wildebeest", "zebra", "giraffe",
-                "warthog", "topi", "gazelle", "impala", "antelope",
-                "hyena", "vulture", "ostrich", "crocodile", "wild dog",
-                "gorilla", "chimpanzee", "baboon",
+                # Big cats & predators
+                "african lion", "leopard", "cheetah",
+                # Elephants & large herbivores
+                "african elephant", "black rhinoceros", "hippopotamus",
+                "african buffalo", "plains zebra", "reticulated giraffe",
+                # Antelope family
+                "wildebeest", "topi", "common eland", "oryx", "impala",
+                "thomson gazelle", "grant gazelle", "antelope",
+                # Canids & hyenas
+                "african wild dog", "spotted hyena", "jackal",
+                # Birds
+                "somali ostrich", "secretary bird", "vulture", "flamingo",
+                # Primates
+                "colobus monkey", "baboon", "chimpanzee",
+                # Other
+                "warthog", "crocodile", "giraffe", "zebra",
+                "lion", "elephant", "rhinoceros", "hyena", "ostrich",
             ])
             self.model      = world_model
             self.model_name = "YOLOv8-World (African wildlife)"
