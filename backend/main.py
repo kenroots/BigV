@@ -168,9 +168,9 @@ async def debug_model():
     models_dir  = Path(__file__).parent.parent / "models"
     model_files = [f.name for f in models_dir.glob("*.pt")] if models_dir.exists() else []
     api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
-    workspace = os.getenv("ROBOFLOW_WORKSPACE", "roboflow-100")
-    project   = os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-bevvy")
-    version   = os.getenv("ROBOFLOW_VERSION",   "1")
+    workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+    project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
+    version   = os.getenv("ROBOFLOW_VERSION",   "4")
 
     # Probe the Roboflow API right now so we can report the exact error
     api_probe = "not tested"
