@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy requirements and install core deps (skip ultralytics — too large for cloud)
+# Install all deps including ultralytics (YOLOv8) for real animal detection
 COPY requirements.txt .
 RUN pip install --no-cache-dir \
     fastapi>=0.110.0 \
@@ -22,7 +22,11 @@ RUN pip install --no-cache-dir \
     numpy>=1.26.0 \
     aiohttp>=3.9.0 \
     pydantic>=2.6.0 \
-    python-dotenv>=1.0.0
+    python-dotenv>=1.0.0 \
+    ultralytics>=8.0.0
+
+# Pre-download YOLOv8n weights so the container doesn't fetch on first request
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 
 # Copy all source files
 COPY backend/ ./backend/
