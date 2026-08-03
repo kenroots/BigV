@@ -106,7 +106,7 @@ class WildlifeDetector:
         # ── Priority 1: Roboflow Inference SDK (serverless — no model file needed) ──
         api_key    = os.getenv("ROBOFLOW_API_KEY", "").strip()
         rf_project = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-xd6ml")
-        rf_version = os.getenv("ROBOFLOW_VERSION", "4")
+        rf_version = os.getenv("ROBOFLOW_VERSION", "1")
         if api_key:
             try:
                 from inference_sdk import InferenceHTTPClient

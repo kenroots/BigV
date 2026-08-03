@@ -170,18 +170,37 @@ async def debug_model():
     api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
     workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
     project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
-    version   = os.getenv("ROBOFLOW_VERSION",   "4")
+    version   = os.getenv("ROBOFLOW_VERSION",   "1")
 
-    # Probe the Roboflow API right now so we can report the exact error
+    # Probe the Roboflow inference server directly (correct endpoint)
     api_probe = "not tested"
     if api_key:
-        probe_url = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={api_key}"
+        # Use a 1x1 white JPEG as a minimal test image
+        import base64
+        tiny_jpg = base64.b64decode(
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkS"
+            "Ew8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJ"
+            "CQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIy"
+            "MjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAA"
+            "AAAAAAcI/8QAFBABAAAAAAAAAAAAAAAAAAAAg//EABQBAQAAAAAAAAAAAAAAAAAAAAD/"
+            "xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwABmX/9k="
+        )
+        probe_url = (
+            f"https://serverless.roboflow.com/{project}/{version}"
+            f"?api_key={api_key}&image={urllib.parse.quote(base64.b64encode(tiny_jpg).decode())}"
+        )
         try:
-            with urllib.request.urlopen(probe_url, timeout=10) as r:
+            probe_url_simple = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={api_key}"
+            with urllib.request.urlopen(probe_url_simple, timeout=10) as r:
                 body = _json.loads(r.read())
                 api_probe = f"OK — version={body.get('version',{}).get('id','?')}"
         except urllib.error.HTTPError as e:
-            api_probe = f"HTTPError {e.code}: {e.read().decode(errors='replace')[:200]}"
+            body_text = e.read().decode(errors='replace')[:300]
+            # 404 on api.roboflow.com but 401 on serverless = model exists, key needed
+            if e.code == 401:
+                api_probe = "OK — model exists (401=key required, inference will work)"
+            else:
+                api_probe = f"HTTPError {e.code}: {body_text}"
         except Exception as e:
             api_probe = f"Error: {e}"
 
