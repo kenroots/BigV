@@ -55,7 +55,8 @@ WILDLIFE_LABELS = [
     "hippopotamus", "giraffe", "reticulated giraffe", "zebra", "plains zebra",
     # Bovids & antelope
     "buffalo", "african buffalo", "wildebeest", "antelope", "gazelle",
-    "thomson gazelle", "grant gazelle", "impala", "springbok",
+    "thomson gazelle", "thomson's gazelle", "thomsons gazelle",
+    "grant gazelle", "grant's gazelle", "impala", "springbok",
     "kudu", "eland", "common eland", "oryx", "gemsbok", "hartebeest",
     "topi", "sable",
     # Other mammals
@@ -88,8 +89,10 @@ ALERT_PRIORITY = {
     "warthog": "medium",
     "buffalo": "high", "african buffalo": "high",
     "wildebeest": "low", "topi": "low",
-    "antelope": "low", "gazelle": "low", "thomson gazelle": "low",
-    "grant gazelle": "low", "impala": "low", "springbok": "low",
+    "antelope": "low", "gazelle": "low",
+    "thomson gazelle": "low", "thomson's gazelle": "low", "thomsons gazelle": "low",
+    "grant gazelle": "low", "grant's gazelle": "low",
+    "impala": "low", "springbok": "low",
     "kudu": "low", "eland": "low", "common eland": "low",
     "oryx": "low", "gemsbok": "low", "hartebeest": "low", "sable": "low",
     "ostrich": "low", "somali ostrich": "low", "secretary bird": "low",
@@ -132,9 +135,12 @@ class WildlifeDetector:
                 # Elephants & large herbivores
                 "african elephant", "black rhinoceros", "hippopotamus",
                 "african buffalo", "plains zebra", "reticulated giraffe",
-                # Antelope family
+                # Antelope family — use both compound and simple names so
+                # YOLO-World's fuzzy vocab matching has the best chance
                 "wildebeest", "topi", "common eland", "oryx", "impala",
-                "thomson gazelle", "grant gazelle", "antelope",
+                "thomson's gazelle", "thomson gazelle", "thomsons gazelle",
+                "grant's gazelle", "grant gazelle", "gazelle", "antelope",
+                "springbok",
                 # Canids & hyenas
                 "african wild dog", "spotted hyena", "jackal",
                 # Birds
@@ -148,12 +154,14 @@ class WildlifeDetector:
             self.model      = world_model
             self.model_name = "YOLOv8-World (African wildlife)"
             self.backend    = "ultralytics"
+            self.is_world_model = True   # flag so remap is never applied
             logger.info(f"Loaded model: {self.model_name}")
             return
         except Exception as e:
             logger.warning(f"YOLO-World load failed: {e} — falling back to yolov8n")
 
         # ── Priority 2: local YOLOv8n (COCO fallback) ─────────────────────────
+        self.is_world_model = False
         try:
             from ultralytics import YOLO
             # Priority: custom path > env var > default
@@ -276,8 +284,8 @@ class WildlifeDetector:
 
             # When running on the generic COCO model (yolov8n.pt), remap
             # domestic/generic labels to their African wildlife equivalents.
-            # Specialised Roboflow models already output the correct labels.
-            if "yolov8n" in self.model_name or "yolov8s" in self.model_name:
+            # YOLO-World already outputs correct species names — never remap it.
+            if not getattr(self, "is_world_model", False):
                 label = COCO_AFRICAN_REMAP.get(label, label)
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
