@@ -198,6 +198,50 @@ async def debug_model():
     }
 
 
+@app.get("/debug/classes")
+async def debug_classes():
+    """Returns the raw class list the Roboflow model knows about."""
+    if detector.backend != "roboflow_inference":
+        return {"error": "Roboflow inference not active", "backend": detector.backend}
+    try:
+        # infer a blank white image — returns empty predictions but valid response
+        import numpy as np, cv2, tempfile, os as _os
+        blank = np.ones((64, 64, 3), dtype=np.uint8) * 255
+        _, buf = cv2.imencode(".jpg", blank)
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(buf.tobytes()); tmp_path = tmp.name
+        result = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
+        _os.unlink(tmp_path)
+        return {
+            "model_id":    detector.rf_model_id,
+            "raw_response_keys": list(result.keys()),
+            "classes_in_response": sorted({p.get("class") for p in result.get("predictions", [])}),
+            "note": "Blank image returns no predictions — scan a real animal via /debug/scan POST",
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/debug/scan")
+async def debug_scan(file: UploadFile = File(...)):
+    """Upload an image and get back raw Roboflow predictions with original class names."""
+    if detector.backend != "roboflow_inference":
+        return {"error": "Roboflow inference not active", "backend": detector.backend}
+    import tempfile, os as _os
+    contents = await file.read()
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        tmp.write(contents); tmp_path = tmp.name
+    try:
+        result = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
+    finally:
+        _os.unlink(tmp_path)
+    return {
+        "model_id":    detector.rf_model_id,
+        "raw_predictions": result.get("predictions", []),
+        "classes_seen": sorted({p.get("class") for p in result.get("predictions", [])}),
+    }
+
+
 @app.get("/sightings")
 async def get_sightings(limit: int = 50):
     return {"sightings": sightings[-limit:], "total": len(sightings)}
