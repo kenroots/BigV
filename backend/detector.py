@@ -37,12 +37,11 @@ COCO_AFRICAN_REMAP = {
     "cat":    "cheetah",    # cheetah/leopard misidentified as cat
 }
 
-# Label remaps for the Roboflow model wildlife-detection-qgiwz/24.
-# "dog" is used by this model for BOTH ostrich AND lion — cannot safely remap.
-# Use /debug/scan to see raw labels and build accurate remaps from real scans.
-ROBOFLOW_LABEL_REMAP = {
-    "deer": "giraffe",      # giraffe → deer (long-neck confusion)
-}
+# Label remaps for the active Roboflow model.
+# wildlife-detection-qgiwz/24 has broken class labels (deer=buffalo/giraffe, etc.)
+# Switch to a clean model via ROBOFLOW_WORKSPACE/PROJECT/VERSION env vars in Railway.
+# These remaps are a temporary band-aid only.
+ROBOFLOW_LABEL_REMAP: dict[str, str] = {}
 
 # Extended wildlife labels (used with YOLO world / custom models)
 WILDLIFE_LABELS = [
@@ -106,8 +105,8 @@ class WildlifeDetector:
 
         # ── Priority 1: Roboflow Inference SDK (serverless — no model file needed) ──
         api_key    = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        rf_project = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-qgiwz")
-        rf_version = os.getenv("ROBOFLOW_VERSION", "24")
+        rf_project = os.getenv("ROBOFLOW_PROJECT", "african-wildlife-bevvy")
+        rf_version = os.getenv("ROBOFLOW_VERSION", "1")
         if api_key:
             try:
                 from inference_sdk import InferenceHTTPClient
