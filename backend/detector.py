@@ -200,8 +200,8 @@ class WildlifeDetector:
         """Demo mode: randomly simulate detections for testing UI."""
         import random
         if random.random() < 0.3:  # 30% chance of detection
-            animals = ["deer", "fox", "eagle", "bear", "wolf"]
-            label = random.choice(animals)
+            # Use the full wildlife label list so all known animals can appear
+            label = random.choice(WILDLIFE_LABELS)
             h, w = frame.shape[:2]
             return [{
                 "label": label,
@@ -215,7 +215,9 @@ class WildlifeDetector:
         return []
 
     def _is_animal(self, label: str) -> bool:
-        return any(w in label for w in WILDLIFE_LABELS)
+        # Use whole-word matching to avoid false positives like
+        # "bear" matching "wildebeest" or "cat" matching "wildcat".
+        return any(w == label or label == w for w in WILDLIFE_LABELS)
 
     def draw_detections(self, frame: np.ndarray, detections: list[dict]) -> np.ndarray:
         """Draw bounding boxes and labels on frame."""
