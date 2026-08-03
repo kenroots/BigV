@@ -161,20 +161,40 @@ async def health():
 
 @app.get("/debug/model")
 async def debug_model():
-    """Diagnostic endpoint — shows detector state and Roboflow env vars."""
+    """Diagnostic endpoint — shows detector state, Roboflow env vars, and live download test."""
     from pathlib import Path
-    models_dir = Path(__file__).parent.parent / "models"
+    import urllib.request, urllib.error, json as _json
+
+    models_dir  = Path(__file__).parent.parent / "models"
     model_files = [f.name for f in models_dir.glob("*.pt")] if models_dir.exists() else []
-    api_key = os.getenv("ROBOFLOW_API_KEY", "")
+    api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
+    workspace = os.getenv("ROBOFLOW_WORKSPACE", "wildlife-detection-5gnjr")
+    project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-5gnjr")
+    version   = os.getenv("ROBOFLOW_VERSION",   "2")
+
+    # Probe the Roboflow API right now so we can report the exact error
+    api_probe = "not tested"
+    if api_key:
+        probe_url = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={api_key}"
+        try:
+            with urllib.request.urlopen(probe_url, timeout=10) as r:
+                body = _json.loads(r.read())
+                api_probe = f"OK — version={body.get('version',{}).get('id','?')}"
+        except urllib.error.HTTPError as e:
+            api_probe = f"HTTPError {e.code}: {e.read().decode(errors='replace')[:200]}"
+        except Exception as e:
+            api_probe = f"Error: {e}"
+
     return {
-        "detector":         detector.model_name,
-        "backend":          detector.backend,
-        "models_dir":       str(models_dir),
-        "model_files":      model_files,
-        "roboflow_api_key": "SET" if api_key else "NOT SET",
-        "roboflow_workspace": os.getenv("ROBOFLOW_WORKSPACE", "african-wildlife-mwx4d"),
-        "roboflow_project":   os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-8csiv"),
-        "roboflow_version":   os.getenv("ROBOFLOW_VERSION",   "1"),
+        "detector":           detector.model_name,
+        "backend":            detector.backend,
+        "models_dir":         str(models_dir),
+        "model_files":        model_files,
+        "roboflow_api_key":   "SET" if api_key else "NOT SET",
+        "roboflow_workspace": workspace,
+        "roboflow_project":   project,
+        "roboflow_version":   version,
+        "roboflow_api_probe": api_probe,
     }
 
 

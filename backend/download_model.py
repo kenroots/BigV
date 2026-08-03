@@ -32,9 +32,9 @@ MODEL_DEST  = MODELS_DIR / "african-wildlife-yolov8.pt"
 def download() -> bool:
     # Read env vars at call time — NOT at module import time
     api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
-    workspace = os.getenv("ROBOFLOW_WORKSPACE", "african-wildlife-mwx4d")
-    project   = os.getenv("ROBOFLOW_PROJECT",   "african-wildlife-8csiv")
-    version   = os.getenv("ROBOFLOW_VERSION",   "1")
+    workspace = os.getenv("ROBOFLOW_WORKSPACE", "wildlife-detection-5gnjr")
+    project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-5gnjr")
+    version   = os.getenv("ROBOFLOW_VERSION",   "2")
 
     if not api_key:
         logger.warning("ROBOFLOW_API_KEY not set — skipping Roboflow download.")
