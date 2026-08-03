@@ -19,7 +19,7 @@ BigV Safari is an AI-powered wildlife detection app for safari guides and touris
 ┌─────────────────────────────────────────────────────────┐
 │              PWA Frontend (HTML/CSS/JS)                  │
 │         Served by FastAPI backend on Railway             │
-│         https://bigv-production.up.railway.app           │
+│         https://bigv-safari.up.railway.app           │
 └────────────────────┬────────────────────────────────────┘
                      │ WebSocket + REST API
                      ▼
@@ -116,7 +116,7 @@ BigV Safari is an AI-powered wildlife detection app for safari guides and touris
 
 4. **Pushed to GitHub** → Railway auto-deployed from the repo
 
-5. **Backend live at**: `https://bigv-production.up.railway.app`
+5. **Backend live at**: `https://bigv-safari.up.railway.app`
 
 ---
 
@@ -145,7 +145,7 @@ BigV Safari is an AI-powered wildlife detection app for safari guides and touris
    ```
 
 4. **Ran `bubblewrap init`** in `/tmp/bigv-android/`:
-   - Domain: `bigv-production.up.railway.app`
+   - Domain: `bigv-safari.up.railway.app`
    - Package ID: `com.bigvsafari.app`
    - App name: `BigV Safari`
    - Generated `twa-manifest.json`
@@ -197,7 +197,7 @@ BigV Safari is an AI-powered wildlife detection app for safari guides and touris
 
 4. **Verified live**:
    ```bash
-   curl https://bigv-production.up.railway.app/.well-known/assetlinks.json
+   curl https://bigv-safari.up.railway.app/.well-known/assetlinks.json
    # Returns the JSON ✅
    ```
 
@@ -245,7 +245,7 @@ BigV Safari is an AI-powered wildlife detection app for safari guides and touris
 | Keystore password | `bigvsafari123` |
 | Key alias | `android` |
 | Package ID | `com.bigvsafari.app` |
-| Railway URL | `https://bigv-production.up.railway.app` |
+| Railway URL | `https://bigv-safari.up.railway.app` |
 | GitHub repo | `https://github.com/KenCher/BigV` |
 
 > ⚠️ **Never lose the keystore file.** It is required to publish any future updates to the app on Google Play. If lost, you cannot update the app — you would need to publish a new app with a different package ID.
