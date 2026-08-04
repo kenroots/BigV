@@ -122,10 +122,32 @@ class WildlifeDetector:
         self._load_model(self.custom_model_path)
 
     def _load_model(self, model_path: Optional[str]):
-        """Try YOLO-World first (open-vocab African wildlife), then fall back."""
+        """Load best available detector, in priority order."""
+        self.is_world_model = False
 
-        # ── Priority 1: YOLO-World open-vocabulary model ──────────────────────
-        # Detects African species by name — no retraining needed
+        # ── Priority 1: Roboflow Inference SDK (serverless API) ───────────────
+        # Best accuracy for African wildlife — no local model file needed.
+        # Activated when ROBOFLOW_API_KEY env var is set in Railway.
+        api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+        project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
+        version   = os.getenv("ROBOFLOW_VERSION",   "1")
+        if api_key:
+            try:
+                from inference_sdk import InferenceHTTPClient
+                self.rf_client   = InferenceHTTPClient(
+                    api_url="https://serverless.roboflow.com",
+                    api_key=api_key,
+                )
+                self.rf_model_id = f"{project}/{version}"
+                self.model_name  = f"Roboflow ({project} v{version})"
+                self.backend     = "roboflow_inference"
+                logger.info(f"Loaded model: {self.model_name}")
+                return
+            except Exception as e:
+                logger.warning(f"Roboflow Inference SDK failed: {e} — falling back to YOLO-World")
+
+        # ── Priority 2: YOLO-World open-vocabulary model ──────────────────────
         try:
             from ultralytics import YOLOWorld
             world_model = YOLOWorld("yolov8s-worldv2.pt")
@@ -154,14 +176,13 @@ class WildlifeDetector:
             self.model      = world_model
             self.model_name = "YOLOv8-World (African wildlife)"
             self.backend    = "ultralytics"
-            self.is_world_model = True   # flag so remap is never applied
+            self.is_world_model = True
             logger.info(f"Loaded model: {self.model_name}")
             return
         except Exception as e:
             logger.warning(f"YOLO-World load failed: {e} — falling back to yolov8n")
 
-        # ── Priority 2: local YOLOv8n (COCO fallback) ─────────────────────────
-        self.is_world_model = False
+        # ── Priority 3: local YOLOv8n (COCO fallback) ─────────────────────────
         try:
             from ultralytics import YOLO
             # Priority: custom path > env var > default
