@@ -269,7 +269,7 @@ class WildlifeDetector:
         return detections
 
     def _detect_ultralytics(self, frame: np.ndarray) -> list[dict]:
-        results = self.model(frame, verbose=False)[0]
+        results = self.model(frame, conf=self.confidence_threshold, verbose=False)[0]
         detections = []
         for box in results.boxes:
             conf = float(box.conf[0])
