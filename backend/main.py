@@ -189,7 +189,6 @@ async def debug_world():
 @app.post("/debug/raw-scan")
 async def debug_raw_scan(file: UploadFile = File(...)):
     """Upload an image and return ALL YOLO boxes with no threshold filtering."""
-    import tempfile as _tmp, os as _os
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -198,6 +197,9 @@ async def debug_raw_scan(file: UploadFile = File(...)):
 
     if detector.backend != "ultralytics":
         return {"error": "ultralytics backend not active", "backend": detector.backend}
+
+    # Show what classes the model has configured
+    model_names = dict(detector.model.names) if hasattr(detector.model, "names") else {}
 
     results = detector.model(frame, verbose=False)[0]
     all_boxes = []
@@ -208,11 +210,24 @@ async def debug_raw_scan(file: UploadFile = File(...)):
         all_boxes.append({"label": label, "conf": round(conf, 4)})
     # Sort by confidence descending
     all_boxes.sort(key=lambda x: -x["conf"])
+
+    # Also try with conf=0.001 to see anything at all
+    results_low = detector.model(frame, conf=0.001, verbose=False)[0]
+    low_boxes = [
+        {"label": results_low.names[int(b.cls[0])], "conf": round(float(b.conf[0]), 4)}
+        for b in results_low.boxes
+    ]
+    low_boxes.sort(key=lambda x: -x["conf"])
+
     return {
-        "total_boxes": len(all_boxes),
+        "image_shape": list(frame.shape),
+        "model_classes": model_names,
+        "total_boxes_default": len(all_boxes),
+        "total_boxes_conf001": len(low_boxes),
         "current_threshold": detector.confidence_threshold,
         "is_world_model": getattr(detector, "is_world_model", False),
-        "all_boxes": all_boxes[:20],  # top 20
+        "top_boxes_default": all_boxes[:10],
+        "top_boxes_conf001": low_boxes[:10],
     }
 
 
