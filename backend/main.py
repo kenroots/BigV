@@ -161,13 +161,26 @@ async def health():
 
 @app.get("/debug/world")
 async def debug_world():
-    """Test YOLO-World load in isolation — surfaces the exact exception if it fails."""
-    import traceback
+    """Test YOLO-World load + run inference on a synthetic image to show raw scores."""
+    import traceback, tempfile, cv2 as _cv2, numpy as _np
     try:
         from ultralytics import YOLOWorld
         m = YOLOWorld("yolov8s-worldv2.pt")
-        m.set_classes(["thomson's gazelle", "gazelle", "lion"])
-        return {"status": "ok", "model": str(m.model_name if hasattr(m, 'model_name') else type(m).__name__)}
+        m.set_classes(["lion", "gazelle", "elephant", "zebra", "giraffe"])
+        # Run on a blank frame just to get the score range
+        blank = _np.zeros((640, 640, 3), dtype=_np.uint8)
+        results = m(blank, verbose=False)[0]
+        raw = [{"label": results.names[int(b.cls[0])], "conf": round(float(b.conf[0]), 4)}
+               for b in results.boxes]
+        # Also show current detector threshold
+        return {
+            "status": "ok",
+            "model": "yolov8s-worldv2.pt",
+            "detector_threshold": detector.confidence_threshold,
+            "detector_is_world": getattr(detector, 'is_world_model', False),
+            "raw_boxes_on_blank": raw,
+            "note": "blank frame returns 0 boxes normally — use /debug/scan POST with a real image",
+        }
     except Exception as e:
         return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
 

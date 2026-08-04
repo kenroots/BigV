@@ -114,7 +114,7 @@ class WildlifeDetector:
     4. Mock detector — demo mode
     """
 
-    def __init__(self, model_path: Optional[str] = None, confidence_threshold: float = 0.45):
+    def __init__(self, model_path: Optional[str] = None, confidence_threshold: float = 0.25):
         self.confidence_threshold = confidence_threshold
         self.model = None
         self.model_name = "none"
