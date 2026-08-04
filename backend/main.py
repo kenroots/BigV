@@ -161,28 +161,59 @@ async def health():
 
 @app.get("/debug/world")
 async def debug_world():
-    """Test YOLO-World load + run inference on a synthetic image to show raw scores."""
-    import traceback, tempfile, cv2 as _cv2, numpy as _np
+    """Show current detector state and raw scores on a test frame."""
+    import numpy as _np
+    import asyncio as _aio
+
+    state = {
+        "detector": detector.model_name,
+        "backend": detector.backend,
+        "confidence_threshold": detector.confidence_threshold,
+        "is_world_model": getattr(detector, "is_world_model", False),
+    }
+
+    # Run detector on a synthetic frame to surface any runtime errors
     try:
-        from ultralytics import YOLOWorld
-        m = YOLOWorld("yolov8s-worldv2.pt")
-        m.set_classes(["lion", "gazelle", "elephant", "zebra", "giraffe"])
-        # Run on a blank frame just to get the score range
-        blank = _np.zeros((640, 640, 3), dtype=_np.uint8)
-        results = m(blank, verbose=False)[0]
-        raw = [{"label": results.names[int(b.cls[0])], "conf": round(float(b.conf[0]), 4)}
-               for b in results.boxes]
-        # Also show current detector threshold
-        return {
-            "status": "ok",
-            "model": "yolov8s-worldv2.pt",
-            "detector_threshold": detector.confidence_threshold,
-            "detector_is_world": getattr(detector, 'is_world_model', False),
-            "raw_boxes_on_blank": raw,
-            "note": "blank frame returns 0 boxes normally — use /debug/scan POST with a real image",
-        }
+        blank = _np.zeros((320, 320, 3), dtype=_np.uint8)
+        loop = _aio.get_event_loop()
+        raw_boxes = await loop.run_in_executor(None, detector.detect, blank)
+        state["raw_boxes_on_blank"] = raw_boxes
+        state["status"] = "ok"
     except Exception as e:
-        return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+        state["status"] = "error"
+        state["error"] = str(e)
+
+    return state
+
+
+@app.post("/debug/raw-scan")
+async def debug_raw_scan(file: UploadFile = File(...)):
+    """Upload an image and return ALL YOLO boxes with no threshold filtering."""
+    import tempfile as _tmp, os as _os
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Cannot decode image")
+
+    if detector.backend != "ultralytics":
+        return {"error": "ultralytics backend not active", "backend": detector.backend}
+
+    results = detector.model(frame, verbose=False)[0]
+    all_boxes = []
+    for box in results.boxes:
+        conf = float(box.conf[0])
+        cls_id = int(box.cls[0])
+        label = results.names[cls_id]
+        all_boxes.append({"label": label, "conf": round(conf, 4)})
+    # Sort by confidence descending
+    all_boxes.sort(key=lambda x: -x["conf"])
+    return {
+        "total_boxes": len(all_boxes),
+        "current_threshold": detector.confidence_threshold,
+        "is_world_model": getattr(detector, "is_world_model", False),
+        "all_boxes": all_boxes[:20],  # top 20
+    }
 
 
 @app.get("/debug/model")
