@@ -36,21 +36,9 @@ COPY .env.example .env
 # Create models + logs directories
 RUN mkdir -p /app/models /app/logs
 
-# Pre-download YOLO-World + YOLOv8n weights at build time
-# Also pre-encode classes so clip runs at build time, not cold-start
-RUN python -c "
-from ultralytics import YOLOWorld
-import numpy as np
-m = YOLOWorld('yolov8s-worldv2.pt')
-m.set_classes(['lion', 'leopard', 'cheetah', 'elephant', 'rhinoceros',
-               'hippopotamus', 'buffalo', 'zebra', 'giraffe', 'wildebeest',
-               'gazelle', 'impala', 'warthog', 'crocodile', 'hyena',
-               'african wild dog', 'baboon', 'vulture', 'ostrich'])
-# Warm up inference so weights + text embeddings are cached
-m(np.zeros((64,64,3), dtype='uint8'), verbose=False)
-print('YOLO-World warm-up OK')
-"
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+# Pre-download model weights at build time (no warm-up to keep build fast)
+RUN python -c "from ultralytics import YOLOWorld; YOLOWorld('yolov8s-worldv2.pt'); print('YOLO-World weights OK')"
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt'); print('YOLOv8n weights OK')"
 
 WORKDIR /app/backend
 
