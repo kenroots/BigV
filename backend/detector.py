@@ -189,12 +189,24 @@ class WildlifeDetector:
         else:
             return self._detect_mock(frame)
 
+    # Species that COCO reliably identifies — these override Roboflow misclassifications.
+    # COCO natively detects these with high accuracy.
+    _COCO_AUTHORITATIVE = {"giraffe", "zebra", "elephant", "bear", "bird",
+                           "lion",    # via cat → lion remap
+                           "buffalo", # via cow  → buffalo remap
+                           "antelope",# via horse → antelope remap
+                           "gazelle", # via sheep → gazelle remap
+                           "hyena"}   # via dog  → hyena remap (COCO dog = hyena in savanna)
+
+    # Species that Roboflow wildlife-detection-xd6ml/1 reliably identifies.
+    _RF_AUTHORITATIVE   = {"cheetah", "rhinoceros", "bear", "tiger"}
+
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
         """
-        Run Roboflow + YOLOv8n in parallel and merge.
-        Roboflow covers: lion, cheetah, hyena, rhinoceros, bear, tiger.
-        COCO covers:     giraffe, zebra, elephant, bear + remapped classes.
-        Per-species, the highest-confidence detection wins.
+        Run Roboflow + YOLOv8n and merge with authority rules:
+        - COCO is authoritative for giraffe/zebra/elephant/lion (via remap)
+        - Roboflow is authoritative for cheetah/rhinoceros/tiger
+        - For any conflict, the authoritative model wins regardless of confidence
         """
         results_rf = []
         if self.rf_client:
@@ -210,16 +222,31 @@ class WildlifeDetector:
             except Exception as e:
                 logger.warning(f"YOLOv8n detection failed: {e}")
 
-        # Merge: keep highest-confidence box per label
-        best: dict[str, dict] = {}
-        for det in results_rf + results_coco:
-            label = det["label"]
-            if label not in best or det["confidence"] > best[label]["confidence"]:
-                best[label] = det
+        # Build label→detection maps for each source
+        rf_by_label   = {d["label"]: d for d in results_rf}
+        coco_by_label = {d["label"]: d for d in results_coco}
+        all_labels    = set(rf_by_label) | set(coco_by_label)
 
-        merged = list(best.values())
+        merged = []
+        for label in all_labels:
+            rf_det   = rf_by_label.get(label)
+            coco_det = coco_by_label.get(label)
+
+            if coco_det and label in self._COCO_AUTHORITATIVE:
+                # COCO is authoritative — always use COCO detection for this species
+                merged.append(coco_det)
+            elif rf_det and label in self._RF_AUTHORITATIVE:
+                # Roboflow is authoritative for this species
+                merged.append(rf_det)
+            elif coco_det and rf_det:
+                # No authority rule — take higher confidence
+                merged.append(coco_det if coco_det["confidence"] >= rf_det["confidence"] else rf_det)
+            else:
+                # Only one source has it
+                merged.append(coco_det or rf_det)
+
         merged.sort(key=lambda d: -d["confidence"])
-        logger.info(f"Cascade results: RF={len(results_rf)} COCO={len(results_coco)} merged={len(merged)}"
+        logger.info(f"Cascade: RF={len(results_rf)} COCO={len(results_coco)} merged={len(merged)}"
                     + (f" → {[d['label'] for d in merged]}" if merged else ""))
         return merged
 
