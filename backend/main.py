@@ -291,26 +291,26 @@ async def debug_model():
 
 @app.get("/debug/classes")
 async def debug_classes():
-    """Returns the raw class list the Roboflow model knows about."""
+    """Fetch class list directly from the Roboflow model metadata API."""
     if detector.backend != "roboflow_inference":
         return {"error": "Roboflow inference not active", "backend": detector.backend}
+    import urllib.request, urllib.parse, json as _json, os as _os
+    api_key   = _os.getenv("ROBOFLOW_API_KEY", "").strip()
+    workspace = _os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+    project   = _os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
+    version   = _os.getenv("ROBOFLOW_VERSION",   "1")
+    url = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={urllib.parse.quote(api_key)}"
     try:
-        # infer a blank white image — returns empty predictions but valid response
-        import numpy as np, cv2, tempfile, os as _os
-        blank = np.ones((64, 64, 3), dtype=np.uint8) * 255
-        _, buf = cv2.imencode(".jpg", blank)
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp.write(buf.tobytes()); tmp_path = tmp.name
-        result = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
-        _os.unlink(tmp_path)
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = _json.loads(resp.read())
+        classes = data.get("version", {}).get("classes", [])
         return {
-            "model_id":    detector.rf_model_id,
-            "raw_response_keys": list(result.keys()),
-            "classes_in_response": sorted({p.get("class") for p in result.get("predictions", [])}),
-            "note": "Blank image returns no predictions — scan a real animal via /debug/scan POST",
+            "model_id": detector.rf_model_id,
+            "classes":  classes,
+            "count":    len(classes),
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "url": url.replace(api_key, "***")}
 
 
 @app.post("/debug/scan")
