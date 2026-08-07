@@ -252,25 +252,27 @@ class WildlifeDetector:
             return self._detect_mock(frame)
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
-        """Send frame to Roboflow serverless inference API."""
-        import cv2 as _cv2, base64 as _b64, tempfile, os as _os
-        # Encode frame as JPEG bytes then write to temp file for the SDK
+        """Send frame to Roboflow serverless inference API via direct REST call."""
+        import cv2 as _cv2, base64 as _b64, urllib.request, urllib.parse, json as _json
+        # Encode frame as JPEG → base64 string
         _, buf = _cv2.imencode(".jpg", frame)
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp.write(buf.tobytes())
-            tmp_path = tmp.name
-        try:
-            raw = self.rf_client.infer(tmp_path, model_id=self.rf_model_id)
-        finally:
-            _os.unlink(tmp_path)
+        b64_image = _b64.b64encode(buf.tobytes()).decode("utf-8")
 
-        # Normalise SDK response — may be an object rather than a plain dict
-        if hasattr(raw, "dict") and callable(raw.dict):
-            result = raw.dict()
-        elif hasattr(raw, "__dict__"):
-            result = vars(raw)
-        else:
-            result = raw  # already a dict
+        api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        url = (
+            f"https://serverless.roboflow.com/{self.rf_model_id}"
+            f"?api_key={urllib.parse.quote(api_key)}"
+        )
+        payload = _json.dumps({"image": b64_image}).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+
+        logger.info(f"Roboflow REST response keys: {list(result.keys())}")
 
         raw_preds = result.get("predictions", [])
         logger.info(f"Roboflow raw predictions ({len(raw_preds)}): "
