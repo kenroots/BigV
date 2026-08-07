@@ -324,12 +324,48 @@ async def debug_scan(file: UploadFile = File(...)):
         tmp.write(contents); tmp_path = tmp.name
     try:
         result = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
+    except Exception as e:
+        return {"error": str(e), "model_id": detector.rf_model_id}
     finally:
         _os.unlink(tmp_path)
+
+    # SDK may return an object or a dict — normalise to dict
+    if hasattr(result, "__dict__"):
+        result = vars(result)
+    if hasattr(result, "dict"):
+        result = result.dict()
+
+    raw_preds = result.get("predictions", [])
+    # Each prediction may also be an object
+    normalised = []
+    for p in raw_preds:
+        if hasattr(p, "__dict__"):
+            p = vars(p)
+        if hasattr(p, "dict"):
+            p = p.dict()
+        normalised.append(p)
+
+    from detector import ROBOFLOW_LABEL_REMAP, WILDLIFE_LABELS
+    pipeline = []
+    for p in normalised:
+        raw_label = str(p.get("class", "unknown")).lower()
+        remapped   = ROBOFLOW_LABEL_REMAP.get(raw_label, raw_label)
+        in_list    = remapped in WILDLIFE_LABELS
+        pipeline.append({
+            "raw_class":   p.get("class"),
+            "confidence":  round(float(p.get("confidence", 0)), 4),
+            "remapped_to": remapped,
+            "passes_filter": in_list,
+        })
+    pipeline.sort(key=lambda x: -x["confidence"])
+
     return {
-        "model_id":    detector.rf_model_id,
-        "raw_predictions": result.get("predictions", []),
-        "classes_seen": sorted({p.get("class") for p in result.get("predictions", [])}),
+        "model_id":        detector.rf_model_id,
+        "raw_predictions": normalised,
+        "pipeline":        pipeline,
+        "classes_seen":    sorted({p.get("raw_class") for p in pipeline}),
+        "passed_filter":   [p for p in pipeline if p["passes_filter"]],
+        "blocked_filter":  [p for p in pipeline if not p["passes_filter"]],
     }
 
 
