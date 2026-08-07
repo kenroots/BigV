@@ -262,8 +262,13 @@ class WildlifeDetector:
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
         """Send frame to Roboflow serverless inference API via SDK."""
         import cv2 as _cv2, tempfile, os as _os
-        # Write frame to a temp JPEG file — SDK requires a file path
-        _, buf = _cv2.imencode(".jpg", frame)
+        # Resize to max 416px — Roboflow free tier rejects large images
+        h, w = frame.shape[:2]
+        max_side = 416
+        if max(h, w) > max_side:
+            scale = max_side / max(h, w)
+            frame = _cv2.resize(frame, (int(w * scale), int(h * scale)))
+        _, buf = _cv2.imencode(".jpg", frame, [_cv2.IMWRITE_JPEG_QUALITY, 80])
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp.write(buf.tobytes())
             tmp_path = tmp.name
