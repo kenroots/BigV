@@ -152,10 +152,14 @@ async def debug_world():
     import asyncio as _aio
 
     state = {
-        "detector": detector.model_name,
-        "backend": detector.backend,
+        "detector":             detector.model_name,
+        "agent_detector":       agent.detector.model_name,
+        "backend":              detector.backend,
+        "rf_suppress":          list(getattr(detector, "_RF_SUPPRESS", set())),
+        "rf_authoritative":     list(getattr(detector, "_RF_AUTHORITATIVE", set())),
+        "coco_authoritative":   list(getattr(detector, "_COCO_AUTHORITATIVE", set())),
         "confidence_threshold": detector.confidence_threshold,
-        "is_world_model": getattr(detector, "is_world_model", False),
+        "is_world_model":       getattr(detector, "is_world_model", False),
     }
 
     # Run detector on a synthetic frame to surface any runtime errors
