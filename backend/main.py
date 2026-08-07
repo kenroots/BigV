@@ -408,6 +408,45 @@ async def debug_scan(file: UploadFile = File(...)):
     }
 
 
+@app.post("/debug/cascade-scan")
+async def debug_cascade_scan(file: UploadFile = File(...)):
+    """Upload an image and show exactly what each cascade model returns."""
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Cannot decode image")
+
+    import asyncio as _aio
+    loop = _aio.get_event_loop()
+
+    rf_result, coco_result = [], []
+    rf_error, coco_error = None, None
+
+    if detector.rf_client:
+        try:
+            rf_result = await loop.run_in_executor(None, detector._detect_roboflow, frame)
+        except Exception as e:
+            rf_error = f"{type(e).__name__}: {e}"
+
+    if detector.model:
+        try:
+            coco_result = await loop.run_in_executor(None, detector._detect_ultralytics, frame)
+        except Exception as e:
+            coco_error = f"{type(e).__name__}: {e}"
+
+    merged = await loop.run_in_executor(None, detector.detect, frame)
+
+    return {
+        "rf_detections":   rf_result,
+        "rf_error":        rf_error,
+        "coco_detections": coco_result,
+        "coco_error":      coco_error,
+        "merged":          merged,
+        "rf_suppress":     list(getattr(detector, "_RF_SUPPRESS", set())),
+    }
+
+
 @app.get("/sightings")
 async def get_sightings(limit: int = 50):
     return {"sightings": sightings[-limit:], "total": len(sightings)}
