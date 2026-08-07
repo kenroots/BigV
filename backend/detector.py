@@ -29,10 +29,12 @@ COCO_ANIMAL_CLASSES = {
 
 # Label remaps for the COCO fallback model (yolov8n.pt).
 # COCO has no lion class — both "cat" and "dog" visually match lions/big cats.
-# "horse" catches antelopes/topi; "cow" catches buffalo; "sheep" catches gazelle.
+# "horse" catches antelopes/topi; "sheep" catches gazelle.
+# NOTE: "cow" is intentionally NOT remapped — wildebeest and buffalo are both detected as "cow"
+# by COCO and the remap is too ambiguous. Roboflow handles rhinoceros; YOLO-World handles
+# wildebeest and buffalo. COCO "cow" is suppressed entirely (see _COCO_SUPPRESS).
 COCO_AFRICAN_REMAP = {
     "horse":  "antelope",   # antelopes/impalas detected as horses (topi handled below)
-    "cow":    "buffalo",    # buffalo/wildebeest detected as cow
     "dog":    "lion",       # lions detected as dogs (body shape match) — most common in safari
     "cat":    "lion",       # lions/leopards detected as cat
     "sheep":  "gazelle",    # gazelles/springbok detected as sheep
@@ -254,10 +256,11 @@ class WildlifeDetector:
     # Species Roboflow wildlife-detection-xd6ml/1 is authoritative for.
     _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "elephant", "tiger", "warthog", "lion"}
 
-    # COCO remapped labels to suppress from cascade output entirely —
-    # these remaps are too ambiguous and cause rhino→buffalo false positives.
-    # Roboflow handles these species directly.
-    _COCO_SUPPRESS = {"buffalo"}
+    # COCO labels to suppress from cascade output entirely.
+    # "cow" is suppressed because it maps to both wildebeest and buffalo ambiguously,
+    # and previously caused wildebeest→rhinoceros via the cow≥50%→rhino rule.
+    # Roboflow handles rhinoceros; YOLO-World handles wildebeest and buffalo.
+    _COCO_SUPPRESS = {"buffalo", "cow"}
 
     # Roboflow labels to suppress — known misclassification sources.
     _RF_SUPPRESS = {"hyena"}
@@ -459,10 +462,6 @@ class WildlifeDetector:
                 # Remapped labels are uncertain — require higher confidence
                 if original != label and conf < 0.30:
                     continue
-                # COCO "cow" at ≥50% in a safari context = rhinoceros
-                # (buffalo is already suppressed; large grey animal at high conf = rhino)
-                if original == "cow" and conf >= 0.50:
-                    label = "rhinoceros"
                 # COCO "horse" at ≥40% but < 60%: could be topi (stocky, dark body).
                 # At ≥60% it's more likely a true antelope (which COCO_AFRICAN_REMAP already gives).
                 # Only apply when YOLO-World hasn't already fired on topi.
