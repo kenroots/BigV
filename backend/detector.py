@@ -293,8 +293,9 @@ class WildlifeDetector:
         return merged
 
     def _detect_world(self, frame: np.ndarray) -> list[dict]:
-        """Run YOLO-World on gap species only."""
-        results = self.world_model(frame, conf=self.confidence_threshold, verbose=False)[0]
+        """Run YOLO-World on gap species only — higher threshold to reduce false positives."""
+        world_threshold = max(self.confidence_threshold, 0.25)
+        results = self.world_model(frame, conf=world_threshold, verbose=False)[0]
         detections = []
         for box in results.boxes:
             conf = float(box.conf[0])
