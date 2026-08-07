@@ -29,13 +29,29 @@ COCO_ANIMAL_CLASSES = {
 
 # Label remaps for the COCO fallback model (yolov8n.pt).
 # COCO has no lion class — both "cat" and "dog" visually match lions/big cats.
-# "horse" catches antelopes; "cow" catches buffalo; "sheep" catches gazelle.
+# "horse" catches antelopes/topi; "cow" catches buffalo; "sheep" catches gazelle.
 COCO_AFRICAN_REMAP = {
-    "horse":  "antelope",   # antelopes/impalas detected as horses
+    "horse":  "antelope",   # antelopes/impalas detected as horses (topi handled below)
     "cow":    "buffalo",    # buffalo/wildebeest detected as cow
     "dog":    "lion",       # lions detected as dogs (body shape match) — most common in safari
     "cat":    "lion",       # lions/leopards detected as cat
     "sheep":  "gazelle",    # gazelles/springbok detected as sheep
+}
+
+# YOLO-World alternative names for species with weak text-image alignment.
+# These aliases often have better CLIP embeddings than the primary name.
+# Values are the canonical label they normalise to.
+WORLD_LABEL_ALIASES: dict[str, str] = {
+    "sassaby":       "topi",   # sassaby = topi (Damaliscus lunatus) — better CLIP match
+    "topi antelope": "topi",   # verbose form also has good alignment
+}
+
+# Species-specific confidence overrides for YOLO-World.
+# Some species names have weak CLIP alignment — accept lower scores for them.
+WORLD_SPECIES_THRESHOLDS: dict[str, float] = {
+    "topi":          0.12,   # topi scores low; sassaby alias also uses this
+    "topi antelope": 0.12,
+    "sassaby":       0.12,
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
@@ -70,7 +86,7 @@ WILDLIFE_LABELS = [
     "thomson gazelle", "thomson's gazelle", "thomsons gazelle",
     "grant gazelle", "grant's gazelle", "impala", "springbok",
     "kudu", "eland", "common eland", "oryx", "gemsbok", "hartebeest",
-    "topi", "sable",
+    "topi", "topi antelope", "sassaby", "sable",
     # Other mammals
     "warthog", "mongoose", "meerkat",
     "gorilla", "chimpanzee", "baboon", "monkey", "colobus monkey",
@@ -100,7 +116,7 @@ ALERT_PRIORITY = {
     "hyena": "high", "spotted hyena": "high",
     "warthog": "medium",
     "buffalo": "high", "african buffalo": "high",
-    "wildebeest": "low", "topi": "low",
+    "wildebeest": "low", "topi": "low", "topi antelope": "low", "sassaby": "low",
     "antelope": "low", "gazelle": "low",
     "thomson gazelle": "low", "thomson's gazelle": "low", "thomsons gazelle": "low",
     "grant gazelle": "low", "grant's gazelle": "low",
@@ -185,7 +201,9 @@ class WildlifeDetector:
                 # Large herbivores
                 "hippopotamus", "crocodile", "buffalo", "wildebeest",
                 # Small/medium antelope — explicit names reduce wildebeest confusion
-                "gazelle", "thomson's gazelle", "impala", "topi", "springbok",
+                "gazelle", "thomson's gazelle", "impala", "springbok",
+                # Topi via aliases (better CLIP alignment than bare "topi")
+                "topi", "topi antelope", "sassaby",
                 # Predators
                 "hyena", "african wild dog", "jackal",
                 # Primates & birds
@@ -299,17 +317,32 @@ class WildlifeDetector:
         return merged
 
     def _detect_world(self, frame: np.ndarray) -> list[dict]:
-        """Run YOLO-World on gap species only — higher threshold to reduce false positives."""
-        world_threshold = max(self.confidence_threshold, 0.25)
-        results = self.world_model(frame, conf=world_threshold, verbose=False)[0]
+        """Run YOLO-World on gap species only — per-species thresholds for weak-CLIP labels."""
+        # Run at the lowest species-specific threshold so YOLO returns all candidates;
+        # we filter per-label below using WORLD_SPECIES_THRESHOLDS.
+        min_world_threshold = min(WORLD_SPECIES_THRESHOLDS.values()) if WORLD_SPECIES_THRESHOLDS else 0.25
+        run_threshold = max(self.confidence_threshold, min(min_world_threshold, 0.12))
+        results = self.world_model(frame, conf=run_threshold, verbose=False)[0]
         detections = []
+        seen_labels: set[str] = set()   # deduplicate aliases → canonical label
         for box in results.boxes:
             conf = float(box.conf[0])
-            if conf < self.confidence_threshold:
+            raw_label = results.names[int(box.cls[0])].lower()
+            # Normalise alias → canonical label
+            label = WORLD_LABEL_ALIASES.get(raw_label, raw_label)
+            # Apply per-species threshold (default 0.25 for all others)
+            species_threshold = max(
+                self.confidence_threshold,
+                WORLD_SPECIES_THRESHOLDS.get(raw_label, 0.25),
+            )
+            if conf < species_threshold:
                 continue
-            label = results.names[int(box.cls[0])].lower()
             if not self._is_animal(label):
                 continue
+            # Keep highest-confidence detection when alias and primary name both fire
+            if label in seen_labels:
+                continue
+            seen_labels.add(label)
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append({
                 "label":      label,
@@ -406,6 +439,11 @@ class WildlifeDetector:
                 # (buffalo is already suppressed; large grey animal at high conf = rhino)
                 if original == "cow" and conf >= 0.50:
                     label = "rhinoceros"
+                # COCO "horse" at ≥40% but < 60%: could be topi (stocky, dark body).
+                # At ≥60% it's more likely a true antelope (which COCO_AFRICAN_REMAP already gives).
+                # Only apply when YOLO-World hasn't already fired on topi.
+                if original == "horse" and 0.40 <= conf < 0.60:
+                    label = "topi"
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append({
