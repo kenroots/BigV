@@ -420,8 +420,8 @@ async def debug_cascade_scan(file: UploadFile = File(...)):
     import asyncio as _aio
     loop = _aio.get_event_loop()
 
-    rf_result, coco_result = [], []
-    rf_error, coco_error = None, None
+    rf_result, coco_result, world_result = [], [], []
+    rf_error, coco_error, world_error = None, None, None
 
     if detector.rf_client:
         try:
@@ -435,15 +435,21 @@ async def debug_cascade_scan(file: UploadFile = File(...)):
         except Exception as e:
             coco_error = f"{type(e).__name__}: {e}"
 
+    if getattr(detector, "world_model", None):
+        try:
+            world_result = await loop.run_in_executor(None, detector._detect_world, frame)
+        except Exception as e:
+            world_error = f"{type(e).__name__}: {e}"
+
     merged = await loop.run_in_executor(None, detector.detect, frame)
 
     return {
-        "rf_detections":   rf_result,
-        "rf_error":        rf_error,
-        "coco_detections": coco_result,
-        "coco_error":      coco_error,
-        "merged":          merged,
-        "rf_suppress":     list(getattr(detector, "_RF_SUPPRESS", set())),
+        "rf_detections":    rf_result,    "rf_error":    rf_error,
+        "coco_detections":  coco_result,  "coco_error":  coco_error,
+        "world_detections": world_result, "world_error": world_error,
+        "merged":           merged,
+        "rf_suppress":      list(getattr(detector, "_RF_SUPPRESS", set())),
+        "coco_suppress":    list(getattr(detector, "_COCO_SUPPRESS", set())),
     }
 
 

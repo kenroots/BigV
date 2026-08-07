@@ -137,14 +137,14 @@ class WildlifeDetector:
         self._load_models()
 
     def _load_models(self):
-        """Load both Roboflow (specialist) and YOLOv8n (COCO generalist) models."""
+        """Load three-model cascade for full African wildlife coverage."""
         loaded = []
 
         # ── Model A: Roboflow wildlife-detection-xd6ml/1 ──────────────────────
-        # Covers: Lion, Cheetah, Hyena, Elephant, Rhinoceros, Bear, Tiger
-        api_key  = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        project  = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-xd6ml")
-        version  = os.getenv("ROBOFLOW_VERSION", "1")
+        # Covers: Lion, Cheetah, Elephant, Rhinoceros (via Bear), Tiger, Warthog
+        api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        project   = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-xd6ml")
+        version   = os.getenv("ROBOFLOW_VERSION", "1")
         workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
         if api_key:
             try:
@@ -161,7 +161,7 @@ class WildlifeDetector:
 
         # ── Model B: YOLOv8n (COCO) ───────────────────────────────────────────
         # Covers natively: giraffe, zebra, elephant, bear, bird
-        # Via COCO_AFRICAN_REMAP: lion(cat), buffalo(cow), hyena(dog), antelope(horse), gazelle(sheep)
+        # Via remaps: lion(cat/dog), rhinoceros(cow≥50%), antelope(horse), gazelle(sheep)
         try:
             from ultralytics import YOLO
             self.model = YOLO("yolov8n.pt")
@@ -169,6 +169,27 @@ class WildlifeDetector:
             logger.info("YOLOv8n COCO model ready")
         except Exception as e:
             logger.warning(f"YOLOv8n load failed: {e}")
+
+        # ── Model C: YOLO-World (gap species) ─────────────────────────────────
+        # Covers species neither Roboflow nor COCO can detect:
+        # leopard, wildebeest, hippopotamus, crocodile, topi, impala, buffalo,
+        # hyena, wild dog, chimpanzee, gorilla, ostrich, vulture, jackal
+        # Only these gap classes are set — keeps scores high and avoids dilution
+        self.world_model = None
+        try:
+            from ultralytics import YOLOWorld
+            wm = YOLOWorld("yolov8s-worldv2.pt")
+            wm.set_classes([
+                "leopard", "wildebeest", "hippopotamus", "crocodile",
+                "topi", "impala", "buffalo", "hyena", "african wild dog",
+                "chimpanzee", "gorilla", "baboon", "ostrich", "vulture",
+                "jackal", "flamingo",
+            ])
+            self.world_model = wm
+            loaded.append("YOLOWorld(gap-species)")
+            logger.info("YOLO-World gap-species model ready")
+        except Exception as e:
+            logger.warning(f"YOLO-World load failed: {e}")
 
         if loaded:
             self.backend    = "cascade"
@@ -225,11 +246,10 @@ class WildlifeDetector:
         results_rf = []
         if self.rf_client:
             try:
-                # Filter out suppressed labels from Roboflow (known misclassification sources)
                 results_rf = [d for d in self._detect_roboflow(frame)
                               if d["label"] not in self._RF_SUPPRESS]
             except Exception as e:
-                logger.error(f"Roboflow detection failed (suppressed): {type(e).__name__}: {e}")
+                logger.error(f"Roboflow detection failed: {type(e).__name__}: {e}")
 
         results_coco = []
         if self.model:
@@ -237,35 +257,60 @@ class WildlifeDetector:
                 results_coco = [d for d in self._detect_ultralytics(frame)
                                 if d["label"] not in self._COCO_SUPPRESS]
             except Exception as e:
-                logger.error(f"YOLOv8n detection failed (suppressed): {type(e).__name__}: {e}")
+                logger.error(f"YOLOv8n detection failed: {type(e).__name__}: {e}")
 
-        # Build label→detection maps for each source
-        rf_by_label   = {d["label"]: d for d in results_rf}
-        coco_by_label = {d["label"]: d for d in results_coco}
-        all_labels    = set(rf_by_label) | set(coco_by_label)
+        results_world = []
+        if self.world_model:
+            try:
+                results_world = self._detect_world(frame)
+            except Exception as e:
+                logger.error(f"YOLO-World detection failed: {type(e).__name__}: {e}")
+
+        # Build label→detection maps per source
+        rf_by_label    = {d["label"]: d for d in results_rf}
+        coco_by_label  = {d["label"]: d for d in results_coco}
+        world_by_label = {d["label"]: d for d in results_world}
+        all_labels     = set(rf_by_label) | set(coco_by_label) | set(world_by_label)
 
         merged = []
         for label in all_labels:
-            rf_det   = rf_by_label.get(label)
-            coco_det = coco_by_label.get(label)
+            rf_det    = rf_by_label.get(label)
+            coco_det  = coco_by_label.get(label)
+            world_det = world_by_label.get(label)
 
             if coco_det and label in self._COCO_AUTHORITATIVE:
-                # COCO is authoritative — always use COCO detection for this species
                 merged.append(coco_det)
             elif rf_det and label in self._RF_AUTHORITATIVE:
-                # Roboflow is authoritative for this species
                 merged.append(rf_det)
-            elif coco_det and rf_det:
-                # No authority rule — take higher confidence
-                merged.append(coco_det if coco_det["confidence"] >= rf_det["confidence"] else rf_det)
             else:
-                # Only one source has it
-                merged.append(coco_det or rf_det)
+                # YOLO-World fills the gap — take best available
+                candidates = [d for d in [rf_det, coco_det, world_det] if d]
+                merged.append(max(candidates, key=lambda d: d["confidence"]))
 
         merged.sort(key=lambda d: -d["confidence"])
         logger.info(f"Cascade: RF={len(results_rf)} COCO={len(results_coco)} merged={len(merged)}"
                     + (f" → {[d['label'] for d in merged]}" if merged else ""))
         return merged
+
+    def _detect_world(self, frame: np.ndarray) -> list[dict]:
+        """Run YOLO-World on gap species only."""
+        results = self.world_model(frame, conf=self.confidence_threshold, verbose=False)[0]
+        detections = []
+        for box in results.boxes:
+            conf = float(box.conf[0])
+            if conf < self.confidence_threshold:
+                continue
+            label = results.names[int(box.cls[0])].lower()
+            if not self._is_animal(label):
+                continue
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            detections.append({
+                "label":      label,
+                "confidence": round(conf, 3),
+                "bbox":       {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                "priority":   ALERT_PRIORITY.get(label, ALERT_PRIORITY["default"]),
+            })
+        return detections
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
         """Send frame to Roboflow serverless inference API via SDK."""
