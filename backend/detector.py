@@ -145,25 +145,21 @@ class WildlifeDetector:
             world_model = YOLOWorld("yolov8s-worldv2.pt")
             world_model.set_classes([
                 # Big cats & predators
-                "lion", "african lion", "leopard", "cheetah", "tiger",
-                # Bears
-                "bear",
+                # One canonical name per species — duplicates dilute scores
+                # Big cats & predators
+                "lion", "leopard", "cheetah",
                 # Large herbivores
-                "elephant", "african elephant", "rhinoceros", "black rhinoceros",
-                "hippopotamus", "giraffe", "reticulated giraffe",
-                "plains zebra", "zebra",
+                "elephant", "rhinoceros", "hippopotamus",
+                "giraffe", "zebra",
                 # Bovids & antelope
-                "buffalo", "african buffalo", "wildebeest", "topi",
-                "common eland", "oryx", "impala", "gazelle", "antelope",
-                "thomson's gazelle", "grant's gazelle", "springbok",
+                "buffalo", "wildebeest", "impala", "gazelle",
+                "oryx", "springbok", "warthog",
                 # Canids & hyenas
-                "hyena", "spotted hyena", "african wild dog", "wild dog", "jackal",
+                "hyena", "wild dog", "jackal",
                 # Other mammals
-                "warthog", "crocodile", "mongoose", "meerkat",
-                "gorilla", "chimpanzee", "baboon", "colobus monkey",
+                "crocodile", "gorilla", "chimpanzee", "baboon",
                 # Birds
-                "ostrich", "somali ostrich", "secretary bird",
-                "vulture", "flamingo",
+                "ostrich", "vulture", "flamingo",
             ])
             self.model      = world_model
             self.model_name = "YOLOv8-World (African wildlife)"
