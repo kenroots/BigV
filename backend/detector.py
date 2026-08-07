@@ -260,12 +260,21 @@ class WildlifeDetector:
     # Roboflow labels to suppress — known misclassification sources.
     _RF_SUPPRESS = {"hyena"}
 
+    # If COCO authoritatively detected species A, suppress YOLO-World label B in the same frame.
+    # YOLO-World confuses visual patterns: zebra stripes → leopard, giraffe patches → leopard.
+    # Key: COCO-authoritative species that fired  →  Value: World labels to suppress
+    _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
+        "zebra":   {"leopard"},   # stripe pattern fires as leopard
+        "giraffe": {"leopard"},   # patch pattern fires as leopard
+    }
+
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
         """
         Run Roboflow + YOLOv8n and merge with authority rules:
         - COCO is authoritative for giraffe/zebra/elephant/lion (via remap)
         - Roboflow is authoritative for cheetah/rhinoceros/tiger
         - For any conflict, the authoritative model wins regardless of confidence
+        - YOLO-World predator labels suppressed when COCO detected a patterned prey species
         """
         results_rf = []
         if self.rf_client:
@@ -294,7 +303,20 @@ class WildlifeDetector:
         rf_by_label    = {d["label"]: d for d in results_rf}
         coco_by_label  = {d["label"]: d for d in results_coco}
         world_by_label = {d["label"]: d for d in results_world}
-        all_labels     = set(rf_by_label) | set(coco_by_label) | set(world_by_label)
+
+        # Suppress YOLO-World predator labels triggered by patterned prey species.
+        # e.g. if COCO fired "zebra", drop "leopard" from World results.
+        coco_authoritative_fired = {
+            lbl for lbl in coco_by_label if lbl in self._COCO_AUTHORITATIVE
+        }
+        world_suppress = set()
+        for coco_lbl in coco_authoritative_fired:
+            world_suppress |= self._WORLD_SUPPRESS_IF_COCO.get(coco_lbl, set())
+        if world_suppress:
+            logger.info(f"Suppressing World labels {world_suppress} — COCO fired {coco_authoritative_fired}")
+            world_by_label = {k: v for k, v in world_by_label.items() if k not in world_suppress}
+
+        all_labels = set(rf_by_label) | set(coco_by_label) | set(world_by_label)
 
         merged = []
         for label in all_labels:
