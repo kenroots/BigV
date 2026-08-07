@@ -189,17 +189,24 @@ class WildlifeDetector:
         else:
             return self._detect_mock(frame)
 
-    # Species that COCO reliably identifies — these override Roboflow misclassifications.
-    # COCO natively detects these with high accuracy.
-    _COCO_AUTHORITATIVE = {"giraffe", "zebra", "elephant", "bear", "bird",
-                           "lion",    # via cat → lion remap
-                           "buffalo", # via cow  → buffalo remap
-                           "antelope",# via horse → antelope remap
-                           "gazelle", # via sheep → gazelle remap
-                           "hyena"}   # via dog  → hyena remap (COCO dog = hyena in savanna)
+    # Species that COCO (yolov8n) reliably identifies — always preferred over Roboflow.
+    _COCO_AUTHORITATIVE = {
+        "giraffe",   # COCO native
+        "zebra",     # COCO native
+        "elephant",  # COCO native
+        "bear",      # COCO native
+        "lion",      # via cat → lion remap
+        "buffalo",   # via cow → buffalo remap
+        "antelope",  # via horse → antelope remap
+        "gazelle",   # via sheep → gazelle remap
+    }
 
-    # Species that Roboflow wildlife-detection-xd6ml/1 reliably identifies.
-    _RF_AUTHORITATIVE   = {"cheetah", "rhinoceros", "bear", "tiger"}
+    # Species Roboflow wildlife-detection-xd6ml/1 is authoritative for.
+    # NOTE: "hyena" excluded — model frequently misclassifies lions as hyena.
+    _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "tiger"}
+
+    # Roboflow labels to suppress entirely — known misclassification sources.
+    _RF_SUPPRESS = {"hyena"}
 
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
         """
@@ -211,7 +218,9 @@ class WildlifeDetector:
         results_rf = []
         if self.rf_client:
             try:
-                results_rf = self._detect_roboflow(frame)
+                # Filter out suppressed labels from Roboflow (known misclassification sources)
+                results_rf = [d for d in self._detect_roboflow(frame)
+                              if d["label"] not in self._RF_SUPPRESS]
             except Exception as e:
                 logger.warning(f"Roboflow detection failed: {e}")
 
