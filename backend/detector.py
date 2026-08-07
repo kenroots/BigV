@@ -39,10 +39,13 @@ COCO_AFRICAN_REMAP = {
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
-# The model uses capitalised class names and one typo — normalise to our canonical labels.
 # Classes: Bear, Cheetah, Elephant, Hyena, Lion, Rhinosauras, Tiger, Wild_Boar
+# Notes:
+#  - "Bear" is used by this model to label rhinoceroses (no rhino class, grey/large body match)
+#  - "Rhinosauras" is a typo in the training data
+#  - "Wild_Boar" → warthog (closest African equivalent)
 ROBOFLOW_LABEL_REMAP: dict[str, str] = {
-    "bear":         "bear",
+    "bear":         "rhinoceros",   # model has no rhino class — rhinos classified as bear
     "cheetah":      "cheetah",
     "elephant":     "elephant",
     "hyena":        "hyena",
@@ -202,8 +205,9 @@ class WildlifeDetector:
     }
 
     # Species Roboflow wildlife-detection-xd6ml/1 is authoritative for.
-    # NOTE: "hyena" excluded — model frequently misclassifies lions as hyena.
-    _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "tiger"}
+    # "bear" → "rhinoceros" via remap, so rhinoceros comes from Roboflow.
+    # "hyena" suppressed — model misclassifies lions as hyena.
+    _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "tiger", "warthog"}
 
     # Roboflow labels to suppress entirely — known misclassification sources.
     _RF_SUPPRESS = {"hyena"}
