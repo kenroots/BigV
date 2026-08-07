@@ -28,14 +28,14 @@ COCO_ANIMAL_CLASSES = {
 }
 
 # Label remaps for the COCO fallback model (yolov8n.pt).
-# COCO has no lion class — "cat" is its closest visual match for big cats.
-# "horse" catches antelopes/impalas; "cow" catches buffalo/wildebeest.
+# COCO has no lion class — both "cat" and "dog" visually match lions/big cats.
+# "horse" catches antelopes; "cow" catches buffalo; "sheep" catches gazelle.
 COCO_AFRICAN_REMAP = {
-    "horse":  "antelope",   # antelopes/impalas look like horses to COCO
-    "cow":    "buffalo",    # buffalo/wildebeest misidentified as cow
-    "dog":    "hyena",      # hyenas misidentified as dogs
-    "cat":    "lion",       # lions/leopards misidentified as cat (most common big cat)
-    "sheep":  "gazelle",    # gazelles/springbok misidentified as sheep
+    "horse":  "antelope",   # antelopes/impalas detected as horses
+    "cow":    "buffalo",    # buffalo/wildebeest detected as cow
+    "dog":    "lion",       # lions detected as dogs (body shape match) — most common in safari
+    "cat":    "lion",       # lions/leopards detected as cat
+    "sheep":  "gazelle",    # gazelles/springbok detected as sheep
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
