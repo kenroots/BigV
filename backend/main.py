@@ -408,6 +408,61 @@ async def debug_scan(file: UploadFile = File(...)):
     }
 
 
+@app.post("/debug/world-scan")
+async def debug_world_scan(file: UploadFile = File(...)):
+    """Upload an image — returns raw YOLO-World scores at conf=0.001 for every class set on the model.
+    Use this to find what score topi/sassaby/tsessebe actually gets before any threshold filter."""
+    if not getattr(detector, "world_model", None):
+        return {"error": "YOLO-World not loaded", "backend": detector.backend}
+
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Cannot decode image")
+
+    import asyncio as _aio
+    from detector import WORLD_LABEL_ALIASES, WORLD_SPECIES_THRESHOLDS
+
+    def _run_raw():
+        # Run at near-zero conf so YOLO returns ALL candidate boxes
+        results = detector.world_model(frame, conf=0.001, verbose=False)[0]
+        boxes = []
+        for box in results.boxes:
+            conf      = float(box.conf[0])
+            raw_label = results.names[int(box.cls[0])].lower()
+            canonical = WORLD_LABEL_ALIASES.get(raw_label, raw_label)
+            threshold = WORLD_SPECIES_THRESHOLDS.get(raw_label, 0.25)
+            boxes.append({
+                "raw_label": raw_label,
+                "canonical": canonical,
+                "conf":      round(conf, 4),
+                "threshold": threshold,
+                "passes":    conf >= threshold,
+            })
+        boxes.sort(key=lambda x: -x["conf"])
+        return boxes
+
+    loop = _aio.get_event_loop()
+    try:
+        all_boxes = await loop.run_in_executor(None, _run_raw)
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+    # Separate topi-related from everything else
+    topi_keys = {"topi", "topi antelope", "sassaby", "tsessebe", "hartebeest"}
+    topi_boxes  = [b for b in all_boxes if b["raw_label"] in topi_keys]
+    other_boxes = [b for b in all_boxes if b["raw_label"] not in topi_keys]
+
+    return {
+        "world_classes":    list(detector.world_model.names.values()) if hasattr(detector.world_model, "names") else [],
+        "topi_candidates":  topi_boxes,
+        "all_boxes_top20":  all_boxes[:20],
+        "other_passes":     [b for b in other_boxes if b["passes"]],
+        "run_threshold":    0.001,
+    }
+
+
 @app.post("/debug/cascade-scan")
 async def debug_cascade_scan(file: UploadFile = File(...)):
     """Upload an image and show exactly what each cascade model returns."""

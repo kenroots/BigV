@@ -42,16 +42,18 @@ COCO_AFRICAN_REMAP = {
 # These aliases often have better CLIP embeddings than the primary name.
 # Values are the canonical label they normalise to.
 WORLD_LABEL_ALIASES: dict[str, str] = {
-    "sassaby":       "topi",   # sassaby = topi (Damaliscus lunatus) — better CLIP match
-    "topi antelope": "topi",   # verbose form also has good alignment
+    "sassaby":       "topi",   # sassaby = topi (Damaliscus lunatus jimela)
+    "topi antelope": "topi",   # verbose form
+    "tsessebe":      "topi",   # tsessebe = southern topi (Damaliscus lunatus lunatus) — best CLIP match
 }
 
 # Species-specific confidence overrides for YOLO-World.
 # Some species names have weak CLIP alignment — accept lower scores for them.
 WORLD_SPECIES_THRESHOLDS: dict[str, float] = {
-    "topi":          0.12,   # topi scores low; sassaby alias also uses this
+    "topi":          0.12,
     "topi antelope": 0.12,
     "sassaby":       0.12,
+    "tsessebe":      0.12,   # tsessebe has the best CLIP embedding of the topi aliases
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
@@ -86,7 +88,7 @@ WILDLIFE_LABELS = [
     "thomson gazelle", "thomson's gazelle", "thomsons gazelle",
     "grant gazelle", "grant's gazelle", "impala", "springbok",
     "kudu", "eland", "common eland", "oryx", "gemsbok", "hartebeest",
-    "topi", "topi antelope", "sassaby", "sable",
+    "topi", "topi antelope", "sassaby", "tsessebe", "sable",
     # Other mammals
     "warthog", "mongoose", "meerkat",
     "gorilla", "chimpanzee", "baboon", "monkey", "colobus monkey",
@@ -116,7 +118,7 @@ ALERT_PRIORITY = {
     "hyena": "high", "spotted hyena": "high",
     "warthog": "medium",
     "buffalo": "high", "african buffalo": "high",
-    "wildebeest": "low", "topi": "low", "topi antelope": "low", "sassaby": "low",
+    "wildebeest": "low", "topi": "low", "topi antelope": "low", "sassaby": "low", "tsessebe": "low",
     "antelope": "low", "gazelle": "low",
     "thomson gazelle": "low", "thomson's gazelle": "low", "thomsons gazelle": "low",
     "grant gazelle": "low", "grant's gazelle": "low",
@@ -202,8 +204,8 @@ class WildlifeDetector:
                 "hippopotamus", "crocodile", "buffalo", "wildebeest",
                 # Small/medium antelope — explicit names reduce wildebeest confusion
                 "gazelle", "thomson's gazelle", "impala", "springbok",
-                # Topi via aliases (better CLIP alignment than bare "topi")
-                "topi", "topi antelope", "sassaby",
+                # Topi via aliases — tsessebe has the best CLIP embedding
+                "topi", "topi antelope", "sassaby", "tsessebe",
                 # Predators
                 "hyena", "african wild dog", "jackal",
                 # Primates & birds
