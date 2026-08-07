@@ -348,9 +348,12 @@ class WildlifeDetector:
                 original = label
                 label = COCO_AFRICAN_REMAP.get(label, label)
                 # Remapped labels are uncertain — require higher confidence
-                # to avoid, e.g., a rhino being called "buffalo" via low-conf "cow"
                 if original != label and conf < 0.30:
                     continue
+                # COCO "cow" at ≥50% in a safari context = rhinoceros
+                # (buffalo is already suppressed; large grey animal at high conf = rhino)
+                if original == "cow" and conf >= 0.50:
+                    label = "rhinoceros"
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append({
