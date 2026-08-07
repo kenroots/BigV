@@ -129,57 +129,41 @@ class WildlifeDetector:
         self.custom_model_path = os.getenv("WILDLIFE_MODEL_PATH", model_path)
         self._load_model(self.custom_model_path)
 
+    # Minimum number of classes a Roboflow model must cover to be used.
+    # Models with fewer classes than this fall back to YOLO-World.
+    RF_MIN_CLASSES = 20
+
     def _load_model(self, model_path: Optional[str]):
         """Load best available detector, in priority order."""
         self.is_world_model = False
 
-        # ── Priority 1: Roboflow Inference SDK (serverless API) ───────────────
-        # Best accuracy for African wildlife — no local model file needed.
-        # Activated when ROBOFLOW_API_KEY env var is set in Railway.
-        api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
-        project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
-        version   = os.getenv("ROBOFLOW_VERSION",   "1")
-        if api_key:
-            try:
-                from inference_sdk import InferenceHTTPClient
-                self.rf_client   = InferenceHTTPClient(
-                    api_url="https://serverless.roboflow.com",
-                    api_key=api_key,
-                )
-                self.rf_model_id = f"{project}/{version}"
-                self.model_name  = f"Roboflow ({project} v{version})"
-                self.backend     = "roboflow_inference"
-                logger.info(f"Loaded model: {self.model_name}")
-                return
-            except Exception as e:
-                logger.warning(f"Roboflow Inference SDK failed: {e} — falling back to YOLO-World")
-
-        # ── Priority 2: YOLO-World open-vocabulary model ──────────────────────
+        # ── Priority 1: YOLO-World open-vocabulary model ──────────────────────
+        # Preferred — recognises the full African wildlife vocabulary by name.
+        # Roboflow is only used if explicitly configured AND covers enough classes.
         try:
             from ultralytics import YOLOWorld
             world_model = YOLOWorld("yolov8s-worldv2.pt")
             world_model.set_classes([
                 # Big cats & predators
-                "african lion", "leopard", "cheetah",
-                # Elephants & large herbivores
-                "african elephant", "black rhinoceros", "hippopotamus",
-                "african buffalo", "plains zebra", "reticulated giraffe",
-                # Antelope family — use both compound and simple names so
-                # YOLO-World's fuzzy vocab matching has the best chance
-                "wildebeest", "topi", "common eland", "oryx", "impala",
-                "thomson's gazelle", "thomson gazelle", "thomsons gazelle",
-                "grant's gazelle", "grant gazelle", "gazelle", "antelope",
-                "springbok",
+                "lion", "african lion", "leopard", "cheetah", "tiger",
+                # Bears
+                "bear",
+                # Large herbivores
+                "elephant", "african elephant", "rhinoceros", "black rhinoceros",
+                "hippopotamus", "giraffe", "reticulated giraffe",
+                "plains zebra", "zebra",
+                # Bovids & antelope
+                "buffalo", "african buffalo", "wildebeest", "topi",
+                "common eland", "oryx", "impala", "gazelle", "antelope",
+                "thomson's gazelle", "grant's gazelle", "springbok",
                 # Canids & hyenas
-                "african wild dog", "spotted hyena", "jackal",
+                "hyena", "spotted hyena", "african wild dog", "wild dog", "jackal",
+                # Other mammals
+                "warthog", "crocodile", "mongoose", "meerkat",
+                "gorilla", "chimpanzee", "baboon", "colobus monkey",
                 # Birds
-                "somali ostrich", "secretary bird", "vulture", "flamingo",
-                # Primates
-                "colobus monkey", "baboon", "chimpanzee",
-                # Other
-                "warthog", "crocodile", "giraffe", "zebra",
-                "lion", "elephant", "rhinoceros", "hyena", "ostrich",
+                "ostrich", "somali ostrich", "secretary bird",
+                "vulture", "flamingo",
             ])
             self.model      = world_model
             self.model_name = "YOLOv8-World (African wildlife)"
@@ -188,7 +172,41 @@ class WildlifeDetector:
             logger.info(f"Loaded model: {self.model_name}")
             return
         except Exception as e:
-            logger.warning(f"YOLO-World load failed: {e} — falling back to yolov8n")
+            logger.warning(f"YOLO-World load failed: {e} — falling back to Roboflow/yolov8n")
+
+        # ── Priority 2: Roboflow Inference SDK (optional, explicit override) ──
+        # Only used when ROBOFLOW_API_KEY is set AND the project has been
+        # explicitly configured via env vars to a model with broad coverage.
+        api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        project = os.getenv("ROBOFLOW_PROJECT", "").strip()   # empty = not configured
+        version = os.getenv("ROBOFLOW_VERSION", "1").strip()
+        if api_key and project:
+            try:
+                from inference_sdk import InferenceHTTPClient
+                import urllib.request as _req, urllib.parse as _parse, json as _json
+                # Verify the model has enough classes before trusting it
+                workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+                meta_url  = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={_parse.quote(api_key)}"
+                with _req.urlopen(meta_url, timeout=8) as r:
+                    meta = _json.loads(r.read())
+                classes = meta.get("version", {}).get("classes", [])
+                if len(classes) >= self.RF_MIN_CLASSES:
+                    self.rf_client   = InferenceHTTPClient(
+                        api_url="https://serverless.roboflow.com",
+                        api_key=api_key,
+                    )
+                    self.rf_model_id = f"{project}/{version}"
+                    self.model_name  = f"Roboflow ({project} v{version}, {len(classes)} classes)"
+                    self.backend     = "roboflow_inference"
+                    logger.info(f"Loaded model: {self.model_name}")
+                    return
+                else:
+                    logger.warning(
+                        f"Roboflow {project}/{version} only has {len(classes)} classes "
+                        f"(need {self.RF_MIN_CLASSES}) — skipping, using yolov8n fallback"
+                    )
+            except Exception as e:
+                logger.warning(f"Roboflow setup failed: {e} — falling back to yolov8n")
 
         # ── Priority 3: local YOLOv8n (COCO fallback) ─────────────────────────
         try:
