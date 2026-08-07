@@ -291,40 +291,41 @@ async def debug_model():
 
 @app.get("/debug/probe-models")
 async def probe_models():
-    """Probe a list of candidate Roboflow models and return their class lists using the live API key."""
-    import urllib.request, urllib.parse, urllib.error, json as _json, os as _os
-    api_key = _os.getenv("ROBOFLOW_API_KEY", "").strip()
-    if not api_key:
-        return {"error": "ROBOFLOW_API_KEY not set"}
+    """Probe candidate Roboflow models and return their class lists using the live API key."""
+    import urllib.request as _req, urllib.parse as _parse, urllib.error as _err, json as _json, os as _os
+    try:
+        api_key = _os.getenv("ROBOFLOW_API_KEY", "").strip()
+        if not api_key:
+            return {"error": "ROBOFLOW_API_KEY not set"}
 
-    candidates = [
-        ("psm-g8de2",        "wildlife-detection-xd6ml", "1"),
-        ("psm-g8de2",        "wildlife-detection-xd6ml", "2"),
-        ("psm-g8de2",        "wildlife-detection-xd6ml", "3"),
-        ("roboflow-100",     "african-wildlife",          "4"),
-        ("roboflow",         "african-wildlife",          "4"),
-        ("roboflow",         "wildlife",                  "1"),
-        ("roboflow",         "animals",                   "1"),
-        ("roboflow",         "animals",                   "2"),
-        ("ci-cd-test",       "wild-animal-detection",     "1"),
-        ("roboflow-universe","african-animals",           "3"),
-    ]
+        candidates = [
+            ("psm-g8de2",    "wildlife-detection-xd6ml", "1"),
+            ("psm-g8de2",    "wildlife-detection-xd6ml", "2"),
+            ("psm-g8de2",    "wildlife-detection-xd6ml", "3"),
+            ("roboflow-100", "african-wildlife",          "4"),
+            ("roboflow",     "african-wildlife",          "4"),
+            ("roboflow",     "wildlife",                  "1"),
+            ("roboflow",     "animals",                   "1"),
+            ("roboflow",     "animals",                   "2"),
+        ]
 
-    results = []
-    for ws, proj, ver in candidates:
-        url = f"https://api.roboflow.com/{ws}/{proj}/{ver}?api_key={urllib.parse.quote(api_key)}"
-        try:
-            with urllib.request.urlopen(url, timeout=8) as resp:
-                data = _json.loads(resp.read())
-            classes = data.get("version", {}).get("classes", [])
-            results.append({"model": f"{ws}/{proj}/{ver}", "classes": classes, "count": len(classes), "status": "ok"})
-        except urllib.error.HTTPError as e:
-            results.append({"model": f"{ws}/{proj}/{ver}", "status": f"HTTP {e.code}", "classes": []})
-        except Exception as e:
-            results.append({"model": f"{ws}/{proj}/{ver}", "status": f"error: {e}", "classes": []})
+        results = []
+        for ws, proj, ver in candidates:
+            url = f"https://api.roboflow.com/{ws}/{proj}/{ver}?api_key={_parse.quote(api_key)}"
+            try:
+                with _req.urlopen(url, timeout=8) as resp:
+                    data = _json.loads(resp.read())
+                classes = data.get("version", {}).get("classes", [])
+                results.append({"model": f"{ws}/{proj}/{ver}", "classes": classes, "count": len(classes), "status": "ok"})
+            except _err.HTTPError as e:
+                results.append({"model": f"{ws}/{proj}/{ver}", "status": f"HTTP {e.code}", "classes": [], "count": 0})
+            except Exception as e:
+                results.append({"model": f"{ws}/{proj}/{ver}", "status": f"error: {str(e)}", "classes": [], "count": 0})
 
-    results.sort(key=lambda x: -x["count"])
-    return {"candidates": results}
+        results.sort(key=lambda x: -x["count"])
+        return {"candidates": results}
+    except Exception as ex:
+        return {"fatal_error": str(ex)}
 
 
 @app.get("/debug/classes")
