@@ -226,14 +226,14 @@ class WildlifeDetector:
                 results_rf = [d for d in self._detect_roboflow(frame)
                               if d["label"] not in self._RF_SUPPRESS]
             except Exception as e:
-                logger.warning(f"Roboflow detection failed: {e}")
+                logger.error(f"Roboflow detection failed (suppressed): {type(e).__name__}: {e}")
 
         results_coco = []
         if self.model:
             try:
                 results_coco = self._detect_ultralytics(frame)
             except Exception as e:
-                logger.warning(f"YOLOv8n detection failed: {e}")
+                logger.error(f"YOLOv8n detection failed (suppressed): {type(e).__name__}: {e}")
 
         # Build label→detection maps for each source
         rf_by_label   = {d["label"]: d for d in results_rf}

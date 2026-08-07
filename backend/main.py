@@ -173,6 +173,18 @@ async def debug_world():
         state["status"] = "error"
         state["error"] = str(e)
 
+    # Run each sub-model directly to expose what they return individually
+    if detector.backend == "cascade":
+        try:
+            blank = _np.zeros((320, 320, 3), dtype=_np.uint8)
+            loop = _aio.get_event_loop()
+            rf_direct   = await loop.run_in_executor(None, detector._detect_roboflow,   blank) if detector.rf_client else "no rf_client"
+            coco_direct = await loop.run_in_executor(None, detector._detect_ultralytics, blank) if detector.model    else "no model"
+            state["cascade_rf_on_blank"]   = rf_direct
+            state["cascade_coco_on_blank"] = coco_direct
+        except Exception as e:
+            state["cascade_debug_error"] = str(e)
+
     return state
 
 
