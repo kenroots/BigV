@@ -260,21 +260,19 @@ class WildlifeDetector:
         return merged
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
-        """Send frame to Roboflow serverless inference API via direct REST call."""
+        """Send frame to Roboflow serverless inference API."""
         import cv2 as _cv2, base64 as _b64, urllib.request as _ureq, urllib.parse as _uparse, json as _json
-        # Encode frame as JPEG → base64 string
+        # Encode frame as JPEG → base64
         _, buf = _cv2.imencode(".jpg", frame)
         b64_image = _b64.b64encode(buf.tobytes()).decode("utf-8")
 
         api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        url = (
-            f"https://serverless.roboflow.com/{self.rf_model_id}"
-            f"?api_key={_uparse.quote(api_key)}"
-        )
-        payload = _json.dumps({"image": b64_image}).encode("utf-8")
-        req = _ureq.Request(
+        # Roboflow serverless expects base64 as a URL-encoded form body
+        url     = f"https://serverless.roboflow.com/{self.rf_model_id}?api_key={_uparse.quote(api_key)}"
+        payload = _uparse.urlencode({"base64": b64_image}).encode("utf-8")
+        req     = _ureq.Request(
             url, data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
         with _ureq.urlopen(req, timeout=15) as resp:
@@ -337,7 +335,12 @@ class WildlifeDetector:
             # domestic/generic labels to their African wildlife equivalents.
             # YOLO-World already outputs correct species names — never remap it.
             if not getattr(self, "is_world_model", False):
+                original = label
                 label = COCO_AFRICAN_REMAP.get(label, label)
+                # Remapped labels are uncertain — require higher confidence
+                # to avoid, e.g., a rhino being called "buffalo" via low-conf "cow"
+                if original != label and conf < 0.30:
+                    continue
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             detections.append({

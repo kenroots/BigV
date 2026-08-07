@@ -356,18 +356,15 @@ async def debug_scan(file: UploadFile = File(...)):
     import base64 as _b64, urllib.request, urllib.parse, json as _json, os as _os
 
     contents = await file.read()
-    # POST image as base64 directly to the Roboflow REST API (serverless endpoint)
     b64_image = _b64.b64encode(contents).decode("utf-8")
     api_key = _os.getenv("ROBOFLOW_API_KEY", "").strip()
-    url = (
-        f"https://serverless.roboflow.com/{detector.rf_model_id}"
-        f"?api_key={urllib.parse.quote(api_key)}"
-    )
+    url     = f"https://serverless.roboflow.com/{detector.rf_model_id}?api_key={urllib.parse.quote(api_key)}"
     try:
-        payload = _json.dumps({"image": b64_image}).encode("utf-8")
+        # Roboflow serverless expects base64 as URL-encoded form body
+        payload = urllib.parse.urlencode({"base64": b64_image}).encode("utf-8")
         req = urllib.request.Request(
             url, data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
