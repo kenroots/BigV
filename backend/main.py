@@ -351,8 +351,10 @@ async def debug_classes():
 @app.post("/debug/scan")
 async def debug_scan(file: UploadFile = File(...)):
     """Upload an image and get back raw Roboflow predictions with original class names."""
-    if detector.backend != "roboflow_inference":
-        return {"error": "Roboflow inference not active", "backend": detector.backend}
+    if detector.backend not in ("roboflow_inference", "cascade"):
+        return {"error": "Roboflow not active", "backend": detector.backend}
+    if not getattr(detector, "rf_client", None):
+        return {"error": "rf_client not initialised", "backend": detector.backend}
     import base64 as _b64, urllib.request, urllib.parse, json as _json, os as _os
 
     contents = await file.read()
