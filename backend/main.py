@@ -54,21 +54,7 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Download Roboflow model on startup if API key is set, then reload detector."""
-    import download_model
-    try:
-        downloaded = await asyncio.get_event_loop().run_in_executor(None, download_model.download)
-    except Exception as e:
-        logger.error(f"Roboflow download raised exception: {e}")
-        downloaded = False
-    if downloaded:
-        # Model file now exists — reload detector so it picks up the new .pt
-        new_detector = WildlifeDetector()
-        agent.detector = new_detector
-        detector.__dict__.update(new_detector.__dict__)
-        logger.info(f"Detector reloaded: {detector.model_name}")
-    else:
-        logger.warning("Roboflow model not loaded — using yolov8n.pt fallback")
+    """No-op lifespan — detector is initialised at module level."""
     yield
 
 app = FastAPI(
