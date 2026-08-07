@@ -180,10 +180,16 @@ class WildlifeDetector:
             from ultralytics import YOLOWorld
             wm = YOLOWorld("yolov8s-worldv2.pt")
             wm.set_classes([
-                "leopard", "wildebeest", "hippopotamus", "crocodile",
-                "topi", "impala", "buffalo", "hyena", "african wild dog",
-                "chimpanzee", "gorilla", "baboon", "ostrich", "vulture",
-                "jackal", "flamingo",
+                # Big cats (gap — Roboflow/COCO miss these)
+                "leopard",
+                # Large herbivores
+                "hippopotamus", "crocodile", "buffalo", "wildebeest",
+                # Small/medium antelope — explicit names reduce wildebeest confusion
+                "gazelle", "thomson's gazelle", "impala", "topi", "springbok",
+                # Predators
+                "hyena", "african wild dog", "jackal",
+                # Primates & birds
+                "chimpanzee", "gorilla", "baboon", "ostrich", "vulture", "flamingo",
             ])
             self.world_model = wm
             loaded.append("YOLOWorld(gap-species)")
