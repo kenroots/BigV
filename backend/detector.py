@@ -242,7 +242,9 @@ class WildlifeDetector:
         Run detection on a frame.
         Returns list of dicts: {label, confidence, bbox, priority}
         """
-        if self.backend == "ultralytics":
+        if self.backend == "roboflow_inference":
+            return self._detect_roboflow(frame)
+        elif self.backend == "ultralytics":
             return self._detect_ultralytics(frame)
         elif self.backend == "opencv_dnn":
             return self._detect_opencv_dnn(frame)
