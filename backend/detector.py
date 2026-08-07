@@ -28,13 +28,14 @@ COCO_ANIMAL_CLASSES = {
 }
 
 # Label remaps for the COCO fallback model (yolov8n.pt).
-# Only applied when no specialised model is loaded.
-# NOTE: "sheep" intentionally NOT remapped — matches both warthog and gazelle.
+# COCO has no lion class — "cat" is its closest visual match for big cats.
+# "horse" catches antelopes/impalas; "cow" catches buffalo/wildebeest.
 COCO_AFRICAN_REMAP = {
     "horse":  "antelope",   # antelopes/impalas look like horses to COCO
     "cow":    "buffalo",    # buffalo/wildebeest misidentified as cow
     "dog":    "hyena",      # hyenas misidentified as dogs
-    "cat":    "cheetah",    # cheetah/leopard misidentified as cat
+    "cat":    "lion",       # lions/leopards misidentified as cat (most common big cat)
+    "sheep":  "gazelle",    # gazelles/springbok misidentified as sheep
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
@@ -115,163 +116,101 @@ ALERT_PRIORITY = {
 
 class WildlifeDetector:
     """
-    Animal detector supporting:
-    1. Roboflow Inference SDK (serverless API) — best African wildlife accuracy
-    2. YOLOv8 (ultralytics) local model — fallback
-    3. OpenCV DNN with COCO model — last resort
-    4. Mock detector — demo mode
+    Cascade detector — runs two models and merges results for full African wildlife coverage:
+      1. Roboflow wildlife-detection-xd6ml/1 — specialist: lion, cheetah, hyena, rhino, elephant, bear
+      2. YOLOv8n (COCO) — generalist: giraffe, zebra, elephant, bear + COCO_AFRICAN_REMAP for others
+    Results are merged; higher-confidence detection wins for any duplicate species.
+    Falls back to mock if neither model loads.
     """
 
     def __init__(self, model_path: Optional[str] = None, confidence_threshold: float = 0.05):
         self.confidence_threshold = confidence_threshold
-        self.model = None
+        self.model      = None   # YOLOv8n (COCO)
+        self.rf_client  = None   # Roboflow inference client
+        self.rf_model_id = None
         self.model_name = "none"
-        self.custom_model_path = os.getenv("WILDLIFE_MODEL_PATH", model_path)
-        self._load_model(self.custom_model_path)
-
-    # Minimum number of classes a Roboflow model must cover to be used.
-    # Models with fewer classes than this fall back to YOLO-World.
-    RF_MIN_CLASSES = 20
-
-    def _load_model(self, model_path: Optional[str]):
-        """Load best available detector, in priority order."""
+        self.backend    = "mock"
         self.is_world_model = False
+        self._load_models()
 
-        # ── Priority 1: YOLO-World open-vocabulary model ──────────────────────
-        # Preferred — recognises the full African wildlife vocabulary by name.
-        # Roboflow is only used if explicitly configured AND covers enough classes.
-        try:
-            from ultralytics import YOLOWorld
-            world_model = YOLOWorld("yolov8s-worldv2.pt")
-            world_model.set_classes([
-                # Big cats & predators
-                # One canonical name per species — duplicates dilute scores
-                # Big cats & predators
-                "lion", "leopard", "cheetah",
-                # Large herbivores
-                "elephant", "rhinoceros", "hippopotamus",
-                "giraffe", "zebra",
-                # Bovids & antelope
-                "buffalo", "wildebeest", "impala", "gazelle",
-                "oryx", "springbok", "warthog",
-                # Canids & hyenas
-                "hyena", "wild dog", "jackal",
-                # Other mammals
-                "crocodile", "gorilla", "chimpanzee", "baboon",
-                # Birds
-                "ostrich", "vulture", "flamingo",
-            ])
-            self.model      = world_model
-            self.model_name = "YOLOv8-World (African wildlife)"
-            self.backend    = "ultralytics"
-            self.is_world_model = True
-            logger.info(f"Loaded model: {self.model_name}")
-            return
-        except Exception as e:
-            logger.warning(f"YOLO-World load failed: {e} — falling back to Roboflow/yolov8n")
+    def _load_models(self):
+        """Load both Roboflow (specialist) and YOLOv8n (COCO generalist) models."""
+        loaded = []
 
-        # ── Priority 2: Roboflow Inference SDK (optional, explicit override) ──
-        # Only used when ROBOFLOW_API_KEY is set AND the project has been
-        # explicitly configured via env vars to a model with broad coverage.
-        api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        project = os.getenv("ROBOFLOW_PROJECT", "").strip()   # empty = not configured
-        version = os.getenv("ROBOFLOW_VERSION", "1").strip()
-        if api_key and project:
+        # ── Model A: Roboflow wildlife-detection-xd6ml/1 ──────────────────────
+        # Covers: Lion, Cheetah, Hyena, Elephant, Rhinoceros, Bear, Tiger
+        api_key  = os.getenv("ROBOFLOW_API_KEY", "").strip()
+        project  = os.getenv("ROBOFLOW_PROJECT", "wildlife-detection-xd6ml")
+        version  = os.getenv("ROBOFLOW_VERSION", "1")
+        workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+        if api_key:
             try:
                 from inference_sdk import InferenceHTTPClient
-                import urllib.request as _req, urllib.parse as _parse, json as _json
-                # Verify the model has enough classes before trusting it
-                workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
-                meta_url  = f"https://api.roboflow.com/{workspace}/{project}/{version}?api_key={_parse.quote(api_key)}"
-                with _req.urlopen(meta_url, timeout=8) as r:
-                    meta = _json.loads(r.read())
-                classes = meta.get("version", {}).get("classes", [])
-                if len(classes) >= self.RF_MIN_CLASSES:
-                    self.rf_client   = InferenceHTTPClient(
-                        api_url="https://serverless.roboflow.com",
-                        api_key=api_key,
-                    )
-                    self.rf_model_id = f"{project}/{version}"
-                    self.model_name  = f"Roboflow ({project} v{version}, {len(classes)} classes)"
-                    self.backend     = "roboflow_inference"
-                    logger.info(f"Loaded model: {self.model_name}")
-                    return
-                else:
-                    logger.warning(
-                        f"Roboflow {project}/{version} only has {len(classes)} classes "
-                        f"(need {self.RF_MIN_CLASSES}) — skipping, using yolov8n fallback"
-                    )
+                self.rf_client   = InferenceHTTPClient(
+                    api_url="https://serverless.roboflow.com",
+                    api_key=api_key,
+                )
+                self.rf_model_id = f"{project}/{version}"
+                loaded.append(f"Roboflow({project} v{version})")
+                logger.info(f"Roboflow model ready: {self.rf_model_id}")
             except Exception as e:
-                logger.warning(f"Roboflow setup failed: {e} — falling back to yolov8n")
+                logger.warning(f"Roboflow load failed: {e}")
 
-        # ── Priority 3: local YOLOv8n (COCO fallback) ─────────────────────────
+        # ── Model B: YOLOv8n (COCO) ───────────────────────────────────────────
+        # Covers natively: giraffe, zebra, elephant, bear, bird
+        # Via COCO_AFRICAN_REMAP: lion(cat), buffalo(cow), hyena(dog), antelope(horse), gazelle(sheep)
         try:
             from ultralytics import YOLO
-            # Priority: custom path > env var > default
-            path = model_path or "yolov8n.pt"  # nano model — fast
-
-            # Check models directory — Roboflow download lands here first
-            models_dir = Path(__file__).parent.parent / "models"
-            custom_paths = [
-                models_dir / "african-wildlife-yolov8.pt",  # Roboflow download target
-                models_dir / "wildlife-yolov8.pt",
-                models_dir / path,
-            ]
-
-            for custom_path in custom_paths:
-                if custom_path.exists():
-                    path = str(custom_path)
-                    logger.info(f"Found custom wildlife model: {path}")
-                    break
-            
-            self.model = YOLO(path)
-            self.model_name = f"YOLOv8 ({Path(path).name})"
-            self.backend = "ultralytics"
-            logger.info(f"Loaded model: {self.model_name}")
-            return
-        except ImportError:
-            logger.warning("ultralytics not installed, trying OpenCV DNN...")
+            self.model = YOLO("yolov8n.pt")
+            loaded.append("YOLOv8n(COCO)")
+            logger.info("YOLOv8n COCO model ready")
         except Exception as e:
-            logger.warning(f"YOLOv8 load failed: {e}, trying OpenCV DNN...")
+            logger.warning(f"YOLOv8n load failed: {e}")
 
-        # Try OpenCV DNN with YOLOv4-tiny
-        try:
-            models_dir = Path(__file__).parent.parent / "models"
-            cfg_path = str(models_dir / "yolov4-tiny.cfg")
-            weights_path = str(models_dir / "yolov4-tiny.weights")
-            names_path = str(models_dir / "coco.names")
-
-            if Path(cfg_path).exists() and Path(weights_path).exists():
-                self.model = cv2.dnn.readNetFromDarknet(cfg_path, weights_path)
-                self.model.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-                self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-                with open(names_path) as f:
-                    self.class_names = [line.strip() for line in f.readlines()]
-                self.model_name = "YOLOv4-tiny (OpenCV DNN)"
-                self.backend = "opencv_dnn"
-                logger.info(f"Loaded model: {self.model_name}")
-                return
-        except Exception as e:
-            logger.warning(f"OpenCV DNN load failed: {e}")
-
-        # Final fallback — mock detector for demo/testing
-        logger.warning("No model loaded — using mock detector (demo mode)")
-        self.model_name = "Mock Detector (demo)"
-        self.backend = "mock"
+        if loaded:
+            self.backend    = "cascade"
+            self.model_name = "Cascade: " + " + ".join(loaded)
+        else:
+            self.backend    = "mock"
+            self.model_name = "Mock Detector (demo)"
+        logger.info(f"Active detector: {self.model_name}")
 
     def detect(self, frame: np.ndarray) -> list[dict]:
         """
-        Run detection on a frame.
+        Run both models and merge results.
         Returns list of dicts: {label, confidence, bbox, priority}
         """
-        if self.backend == "roboflow_inference":
-            return self._detect_roboflow(frame)
+        if self.backend == "cascade":
+            return self._detect_cascade(frame)
         elif self.backend == "ultralytics":
             return self._detect_ultralytics(frame)
         elif self.backend == "opencv_dnn":
             return self._detect_opencv_dnn(frame)
         else:
             return self._detect_mock(frame)
+
+    def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
+        """
+        Run Roboflow + YOLOv8n in parallel and merge.
+        Roboflow covers: lion, cheetah, hyena, rhinoceros, bear, tiger.
+        COCO covers:     giraffe, zebra, elephant, bear + remapped classes.
+        Per-species, the highest-confidence detection wins.
+        """
+        results_rf   = self._detect_roboflow(frame) if self.rf_client else []
+        results_coco = self._detect_ultralytics(frame) if self.model else []
+
+        # Merge: keep highest-confidence box per label
+        best: dict[str, dict] = {}
+        for det in results_rf + results_coco:
+            label = det["label"]
+            if label not in best or det["confidence"] > best[label]["confidence"]:
+                best[label] = det
+
+        merged = list(best.values())
+        merged.sort(key=lambda d: -d["confidence"])
+        logger.info(f"Cascade results: RF={len(results_rf)} COCO={len(results_coco)} merged={len(merged)}"
+                    + (f" → {[d['label'] for d in merged]}" if merged else ""))
+        return merged
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
         """Send frame to Roboflow serverless inference API via direct REST call."""
