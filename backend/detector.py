@@ -260,23 +260,20 @@ class WildlifeDetector:
         return merged
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
-        """Send frame to Roboflow serverless inference API."""
-        import cv2 as _cv2, base64 as _b64, urllib.request as _ureq, urllib.parse as _uparse, json as _json
-        # Encode frame as JPEG → base64
+        """Send frame to Roboflow serverless inference API via SDK."""
+        import cv2 as _cv2, tempfile, os as _os
+        # Write frame to a temp JPEG file — SDK requires a file path
         _, buf = _cv2.imencode(".jpg", frame)
-        b64_image = _b64.b64encode(buf.tobytes()).decode("utf-8")
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(buf.tobytes())
+            tmp_path = tmp.name
+        try:
+            raw = self.rf_client.infer(tmp_path, model_id=self.rf_model_id)
+        finally:
+            _os.unlink(tmp_path)
 
-        api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        # Roboflow serverless expects base64 as a URL-encoded form body
-        url     = f"https://serverless.roboflow.com/{self.rf_model_id}?api_key={_uparse.quote(api_key)}"
-        payload = _uparse.urlencode({"base64": b64_image}).encode("utf-8")
-        req     = _ureq.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            method="POST",
-        )
-        with _ureq.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read())
+        # SDK returns a plain dict with "predictions" key
+        result = raw if isinstance(raw, dict) else (vars(raw) if hasattr(raw, "__dict__") else {})
 
         logger.info(f"Roboflow REST response keys: {list(result.keys())}")
 

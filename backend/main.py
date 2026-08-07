@@ -355,24 +355,20 @@ async def debug_scan(file: UploadFile = File(...)):
         return {"error": "Roboflow not active", "backend": detector.backend}
     if not getattr(detector, "rf_client", None):
         return {"error": "rf_client not initialised", "backend": detector.backend}
-    import base64 as _b64, urllib.request, urllib.parse, json as _json, os as _os
+    import tempfile, os as _os
 
     contents = await file.read()
-    b64_image = _b64.b64encode(contents).decode("utf-8")
-    api_key = _os.getenv("ROBOFLOW_API_KEY", "").strip()
-    url     = f"https://serverless.roboflow.com/{detector.rf_model_id}?api_key={urllib.parse.quote(api_key)}"
+    # Write to temp file — Roboflow SDK requires a file path
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        tmp.write(contents); tmp_path = tmp.name
     try:
-        # Roboflow serverless expects base64 as URL-encoded form body
-        payload = urllib.parse.urlencode({"base64": b64_image}).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = _json.loads(resp.read())
+        raw = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
     except Exception as e:
         return {"error": str(e), "model_id": detector.rf_model_id}
+    finally:
+        _os.unlink(tmp_path)
+
+    result = raw if isinstance(raw, dict) else (vars(raw) if hasattr(raw, "__dict__") else {})
 
     raw_preds = result.get("predictions", [])
 
