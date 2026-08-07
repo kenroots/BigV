@@ -185,39 +185,45 @@ async def debug_raw_scan(file: UploadFile = File(...)):
     if frame is None:
         raise HTTPException(status_code=400, detail="Cannot decode image")
 
-    if detector.backend != "ultralytics":
-        return {"error": "ultralytics backend not active", "backend": detector.backend}
+    # Support cascade backend — use the COCO sub-model directly
+    coco_model = None
+    if detector.backend == "cascade" and detector.model is not None:
+        coco_model = detector.model
+    elif detector.backend == "ultralytics":
+        coco_model = detector.model
 
-    # Show what classes the model has configured
-    model_names = dict(detector.model.names) if hasattr(detector.model, "names") else {}
+    if coco_model is None:
+        return {"error": "No COCO model available", "backend": detector.backend}
 
-    results = detector.model(frame, verbose=False)[0]
-    all_boxes = []
-    for box in results.boxes:
-        conf = float(box.conf[0])
-        cls_id = int(box.cls[0])
-        label = results.names[cls_id]
-        all_boxes.append({"label": label, "conf": round(conf, 4)})
-    # Sort by confidence descending
-    all_boxes.sort(key=lambda x: -x["conf"])
+    model_names = dict(coco_model.names) if hasattr(coco_model, "names") else {}
 
-    # Also try with conf=0.001 to see anything at all
-    results_low = detector.model(frame, conf=0.001, verbose=False)[0]
-    low_boxes = [
-        {"label": results_low.names[int(b.cls[0])], "conf": round(float(b.conf[0]), 4)}
-        for b in results_low.boxes
-    ]
+    results_low = coco_model(frame, conf=0.001, verbose=False)[0]
+    from detector import COCO_AFRICAN_REMAP
+    low_boxes = []
+    for b in results_low.boxes:
+        raw_label = results_low.names[int(b.cls[0])].lower()
+        remapped   = COCO_AFRICAN_REMAP.get(raw_label, raw_label)
+        low_boxes.append({
+            "raw_label": raw_label,
+            "remapped":  remapped,
+            "conf":      round(float(b.conf[0]), 4),
+        })
     low_boxes.sort(key=lambda x: -x["conf"])
 
+    results_default = coco_model(frame, verbose=False)[0]
+    default_boxes = []
+    for b in results_default.boxes:
+        raw_label = results_default.names[int(b.cls[0])].lower()
+        remapped   = COCO_AFRICAN_REMAP.get(raw_label, raw_label)
+        default_boxes.append({"raw_label": raw_label, "remapped": remapped, "conf": round(float(b.conf[0]), 4)})
+    default_boxes.sort(key=lambda x: -x["conf"])
+
     return {
-        "image_shape": list(frame.shape),
-        "model_classes": model_names,
-        "total_boxes_default": len(all_boxes),
-        "total_boxes_conf001": len(low_boxes),
-        "current_threshold": detector.confidence_threshold,
-        "is_world_model": getattr(detector, "is_world_model", False),
-        "top_boxes_default": all_boxes[:10],
-        "top_boxes_conf001": low_boxes[:10],
+        "image_shape":        list(frame.shape),
+        "backend":            detector.backend,
+        "coco_classes":       model_names,
+        "boxes_at_threshold": default_boxes[:10],
+        "boxes_at_conf001":   low_boxes[:10],
     }
 
 
