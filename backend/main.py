@@ -318,50 +318,47 @@ async def debug_scan(file: UploadFile = File(...)):
     """Upload an image and get back raw Roboflow predictions with original class names."""
     if detector.backend != "roboflow_inference":
         return {"error": "Roboflow inference not active", "backend": detector.backend}
-    import tempfile, os as _os
+    import base64 as _b64, urllib.request, urllib.parse, json as _json, os as _os
+
     contents = await file.read()
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        tmp.write(contents); tmp_path = tmp.name
+    # POST image as base64 directly to the Roboflow REST API (serverless endpoint)
+    b64_image = _b64.b64encode(contents).decode("utf-8")
+    api_key = _os.getenv("ROBOFLOW_API_KEY", "").strip()
+    url = (
+        f"https://serverless.roboflow.com/{detector.rf_model_id}"
+        f"?api_key={urllib.parse.quote(api_key)}"
+    )
     try:
-        result = detector.rf_client.infer(tmp_path, model_id=detector.rf_model_id)
+        payload = _json.dumps({"image": b64_image}).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = _json.loads(resp.read())
     except Exception as e:
         return {"error": str(e), "model_id": detector.rf_model_id}
-    finally:
-        _os.unlink(tmp_path)
-
-    # SDK may return an object or a dict — normalise to dict
-    if hasattr(result, "__dict__"):
-        result = vars(result)
-    if hasattr(result, "dict"):
-        result = result.dict()
 
     raw_preds = result.get("predictions", [])
-    # Each prediction may also be an object
-    normalised = []
-    for p in raw_preds:
-        if hasattr(p, "__dict__"):
-            p = vars(p)
-        if hasattr(p, "dict"):
-            p = p.dict()
-        normalised.append(p)
 
     from detector import ROBOFLOW_LABEL_REMAP, WILDLIFE_LABELS
     pipeline = []
-    for p in normalised:
+    for p in raw_preds:
         raw_label = str(p.get("class", "unknown")).lower()
         remapped   = ROBOFLOW_LABEL_REMAP.get(raw_label, raw_label)
         in_list    = remapped in WILDLIFE_LABELS
         pipeline.append({
-            "raw_class":   p.get("class"),
-            "confidence":  round(float(p.get("confidence", 0)), 4),
-            "remapped_to": remapped,
+            "raw_class":     p.get("class"),
+            "confidence":    round(float(p.get("confidence", 0)), 4),
+            "remapped_to":   remapped,
             "passes_filter": in_list,
         })
     pipeline.sort(key=lambda x: -x["confidence"])
 
     return {
-        "model_id":        detector.rf_model_id,
-        "raw_predictions": normalised,
+        "model_id":       detector.rf_model_id,
+        "raw_predictions": raw_preds,
         "pipeline":        pipeline,
         "classes_seen":    sorted({p.get("raw_class") for p in pipeline}),
         "passed_filter":   [p for p in pipeline if p["passes_filter"]],
