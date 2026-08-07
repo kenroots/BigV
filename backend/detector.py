@@ -192,24 +192,27 @@ class WildlifeDetector:
         else:
             return self._detect_mock(frame)
 
-    # Species that COCO (yolov8n) reliably identifies — always preferred over Roboflow.
+    # Species COCO (yolov8n) natively detects with high accuracy — always preferred.
+    # Remapped labels (cow→buffalo, dog→lion etc.) are NOT listed here because
+    # those remaps are ambiguous and can misidentify rhinos/other animals.
     _COCO_AUTHORITATIVE = {
-        "giraffe",   # COCO native
-        "zebra",     # COCO native
-        "elephant",  # COCO native
-        "bear",      # COCO native
-        "lion",      # via cat → lion remap
-        "buffalo",   # via cow → buffalo remap
+        "giraffe",   # COCO native — very reliable
+        "zebra",     # COCO native — very reliable
+        "elephant",  # COCO native — very reliable
+        "lion",      # via cat/dog → lion remap (high conf only, threshold enforced)
         "antelope",  # via horse → antelope remap
         "gazelle",   # via sheep → gazelle remap
     }
 
     # Species Roboflow wildlife-detection-xd6ml/1 is authoritative for.
-    # "bear" → "rhinoceros" via remap, so rhinoceros comes from Roboflow.
-    # "hyena" suppressed — model misclassifies lions as hyena.
-    _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "tiger", "warthog"}
+    _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "elephant", "tiger", "warthog", "lion"}
 
-    # Roboflow labels to suppress entirely — known misclassification sources.
+    # COCO remapped labels to suppress from cascade output entirely —
+    # these remaps are too ambiguous and cause rhino→buffalo false positives.
+    # Roboflow handles these species directly.
+    _COCO_SUPPRESS = {"buffalo"}
+
+    # Roboflow labels to suppress — known misclassification sources.
     _RF_SUPPRESS = {"hyena"}
 
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
@@ -231,7 +234,8 @@ class WildlifeDetector:
         results_coco = []
         if self.model:
             try:
-                results_coco = self._detect_ultralytics(frame)
+                results_coco = [d for d in self._detect_ultralytics(frame)
+                                if d["label"] not in self._COCO_SUPPRESS]
             except Exception as e:
                 logger.error(f"YOLOv8n detection failed (suppressed): {type(e).__name__}: {e}")
 
