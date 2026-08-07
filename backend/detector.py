@@ -196,8 +196,19 @@ class WildlifeDetector:
         COCO covers:     giraffe, zebra, elephant, bear + remapped classes.
         Per-species, the highest-confidence detection wins.
         """
-        results_rf   = self._detect_roboflow(frame) if self.rf_client else []
-        results_coco = self._detect_ultralytics(frame) if self.model else []
+        results_rf = []
+        if self.rf_client:
+            try:
+                results_rf = self._detect_roboflow(frame)
+            except Exception as e:
+                logger.warning(f"Roboflow detection failed: {e}")
+
+        results_coco = []
+        if self.model:
+            try:
+                results_coco = self._detect_ultralytics(frame)
+            except Exception as e:
+                logger.warning(f"YOLOv8n detection failed: {e}")
 
         # Merge: keep highest-confidence box per label
         best: dict[str, dict] = {}
@@ -214,7 +225,7 @@ class WildlifeDetector:
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
         """Send frame to Roboflow serverless inference API via direct REST call."""
-        import cv2 as _cv2, base64 as _b64, urllib.request, urllib.parse, json as _json
+        import cv2 as _cv2, base64 as _b64, urllib.request as _ureq, urllib.parse as _uparse, json as _json
         # Encode frame as JPEG → base64 string
         _, buf = _cv2.imencode(".jpg", frame)
         b64_image = _b64.b64encode(buf.tobytes()).decode("utf-8")
@@ -222,15 +233,15 @@ class WildlifeDetector:
         api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
         url = (
             f"https://serverless.roboflow.com/{self.rf_model_id}"
-            f"?api_key={urllib.parse.quote(api_key)}"
+            f"?api_key={_uparse.quote(api_key)}"
         )
         payload = _json.dumps({"image": b64_image}).encode("utf-8")
-        req = urllib.request.Request(
+        req = _ureq.Request(
             url, data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _ureq.urlopen(req, timeout=15) as resp:
             result = _json.loads(resp.read())
 
         logger.info(f"Roboflow REST response keys: {list(result.keys())}")
