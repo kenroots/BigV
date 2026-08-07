@@ -129,9 +129,9 @@ class WildlifeDetector:
         # Best accuracy for African wildlife — no local model file needed.
         # Activated when ROBOFLOW_API_KEY env var is set in Railway.
         api_key   = os.getenv("ROBOFLOW_API_KEY", "").strip()
-        workspace = os.getenv("ROBOFLOW_WORKSPACE", "roboflow")
-        project   = os.getenv("ROBOFLOW_PROJECT",   "african-wildlife")
-        version   = os.getenv("ROBOFLOW_VERSION",   "4")
+        workspace = os.getenv("ROBOFLOW_WORKSPACE", "psm-g8de2")
+        project   = os.getenv("ROBOFLOW_PROJECT",   "wildlife-detection-xd6ml")
+        version   = os.getenv("ROBOFLOW_VERSION",   "1")
         if api_key:
             try:
                 from inference_sdk import InferenceHTTPClient
