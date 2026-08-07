@@ -37,11 +37,19 @@ COCO_AFRICAN_REMAP = {
     "cat":    "cheetah",    # cheetah/leopard misidentified as cat
 }
 
-# Label remaps for the active Roboflow model.
-# wildlife-detection-qgiwz/24 has broken class labels (deer=buffalo/giraffe, etc.)
-# Switch to a clean model via ROBOFLOW_WORKSPACE/PROJECT/VERSION env vars in Railway.
-# These remaps are a temporary band-aid only.
-ROBOFLOW_LABEL_REMAP: dict[str, str] = {}
+# Label remaps for wildlife-detection-xd6ml/1.
+# The model uses capitalised class names and one typo — normalise to our canonical labels.
+# Classes: Bear, Cheetah, Elephant, Hyena, Lion, Rhinosauras, Tiger, Wild_Boar
+ROBOFLOW_LABEL_REMAP: dict[str, str] = {
+    "bear":         "bear",
+    "cheetah":      "cheetah",
+    "elephant":     "elephant",
+    "hyena":        "hyena",
+    "lion":         "lion",
+    "rhinosauras":  "rhinoceros",   # typo in model class name
+    "tiger":        "tiger",
+    "wild_boar":    "warthog",      # closest safari equivalent
+}
 
 # Extended wildlife labels — all labels YOLO-World may return
 WILDLIFE_LABELS = [
