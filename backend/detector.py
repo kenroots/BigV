@@ -253,29 +253,47 @@ class WildlifeDetector:
 
     def _detect_roboflow(self, frame: np.ndarray) -> list[dict]:
         """Send frame to Roboflow serverless inference API."""
-        import cv2 as _cv2, base64, tempfile, os as _os
-        # Encode frame as JPEG and send to Roboflow
+        import cv2 as _cv2, base64 as _b64, tempfile, os as _os
+        # Encode frame as JPEG bytes then write to temp file for the SDK
         _, buf = _cv2.imencode(".jpg", frame)
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp.write(buf.tobytes())
             tmp_path = tmp.name
         try:
-            result = self.rf_client.infer(tmp_path, model_id=self.rf_model_id)
+            raw = self.rf_client.infer(tmp_path, model_id=self.rf_model_id)
         finally:
             _os.unlink(tmp_path)
 
+        # Normalise SDK response — may be an object rather than a plain dict
+        if hasattr(raw, "dict") and callable(raw.dict):
+            result = raw.dict()
+        elif hasattr(raw, "__dict__"):
+            result = vars(raw)
+        else:
+            result = raw  # already a dict
+
+        raw_preds = result.get("predictions", [])
+        logger.info(f"Roboflow raw predictions ({len(raw_preds)}): "
+                    f"{[getattr(p, 'class', p.get('class','?')) if not isinstance(p, dict) else p.get('class','?') for p in raw_preds]}")
+
         detections = []
-        for pred in result.get("predictions", []):
-            conf  = float(pred.get("confidence", 0))
+        for pred in raw_preds:
+            # Normalise each prediction object
+            if hasattr(pred, "dict") and callable(pred.dict):
+                pred = pred.dict()
+            elif hasattr(pred, "__dict__"):
+                pred = vars(pred)
+
+            conf = float(pred.get("confidence", 0))
             if conf < self.confidence_threshold:
                 continue
-            raw_label = pred.get("class", "unknown").lower()
+            raw_label = str(pred.get("class", "unknown")).lower()
             # Apply model-specific label corrections
             label = ROBOFLOW_LABEL_REMAP.get(raw_label, raw_label)
             if raw_label != label:
                 logger.info(f"Roboflow label remap: '{raw_label}' → '{label}'")
             if not self._is_animal(label):
-                logger.debug(f"Roboflow skipped non-animal label: '{label}'")
+                logger.info(f"Roboflow skipped non-animal/unknown label: '{label}'")
                 continue
             # Roboflow returns centre x/y + width/height
             cx = pred.get("x", 0); cy = pred.get("y", 0)
