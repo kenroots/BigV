@@ -206,15 +206,16 @@ class WildlifeDetector:
             wm.set_classes([
                 # Big cats (gap — Roboflow/COCO miss these)
                 "leopard",
-                # Large herbivores — wildebeest removed: COCO cow→wildebeest handles it
+                # Large herbivores — wildebeest: COCO cow→wildebeest
                 "hippopotamus", "crocodile", "buffalo",
                 # Small/medium antelope
                 "gazelle", "thomson's gazelle", "impala", "springbok",
                 # Topi via aliases — tsessebe has the best CLIP embedding
                 "topi", "topi antelope", "sassaby", "tsessebe",
-                # Predators — african wild dog removed: slender body overlaps with gazelle CLIP
-                # embedding and fires as wild dog on gazelle frames.
-                "hyena", "jackal",
+                # NOTE: hyena removed — Roboflow has a native hyena class; keeping it here
+                # caused topi→hyena misidentification (medium stocky quadruped CLIP overlap).
+                # NOTE: jackal removed — slender canid body fires on topi/antelope frames.
+                # NOTE: african wild dog removed — same slender-body overlap with gazelle.
                 # Primates & birds
                 "chimpanzee", "gorilla", "baboon", "ostrich", "vulture", "flamingo",
             ])
@@ -273,9 +274,11 @@ class WildlifeDetector:
     _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
         "zebra":        {"leopard"},     # stripe pattern → leopard
         "giraffe":      {"leopard"},     # patch pattern → leopard
-        # gazelle (sheep→gazelle): small slender antelope — suppress large-bovine & canid confusion
-        "gazelle":      {"wildebeest", "african wild dog", "jackal"},
-        # wildebeest (cow→wildebeest): large dark bovine — suppress YOLO-World bovine overlap
+        # gazelle (sheep→gazelle): small slender antelope
+        "gazelle":      {"wildebeest", "african wild dog", "jackal", "hyena"},
+        # antelope (horse→antelope): medium quadruped — same canid/hyena overlap risk
+        "antelope":     {"hyena", "jackal", "african wild dog"},
+        # wildebeest (cow→wildebeest): large dark bovine
         "wildebeest":   {"buffalo", "gazelle", "thomson's gazelle", "impala", "springbok"},
     }
 
