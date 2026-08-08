@@ -272,12 +272,11 @@ class WildlifeDetector:
     _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
         "zebra":        {"leopard"},     # stripe pattern fires as leopard
         "giraffe":      {"leopard"},     # patch pattern fires as leopard
-        # COCO fired gazelle (sheep→gazelle) — the animal is a small antelope, not a wildebeest.
-        # wildebeest is now also COCO-authoritative so this entry is belt-and-suspenders.
+        # COCO fired gazelle (sheep→gazelle) → suppress World wildebeest (small ≠ large bovine)
         "gazelle":      {"wildebeest"},
-        # COCO fired wildebeest (cow→wildebeest) — suppress YOLO-World's gazelle/impala
-        # to avoid double-reporting the same animal as two different species.
-        "wildebeest":   {"gazelle", "thomson's gazelle", "impala", "springbok"},
+        # COCO fired wildebeest (cow→wildebeest) → suppress World buffalo (same large bovine shape)
+        # and suppress World gazelle/impala/springbok (wrong direction confusion)
+        "wildebeest":   {"buffalo", "gazelle", "thomson's gazelle", "impala", "springbok"},
     }
 
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
