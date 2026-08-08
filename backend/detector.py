@@ -30,14 +30,15 @@ COCO_ANIMAL_CLASSES = {
 # Label remaps for the COCO fallback model (yolov8n.pt).
 # COCO has no lion class — both "cat" and "dog" visually match lions/big cats.
 # "horse" catches antelopes/topi; "sheep" catches gazelle.
-# NOTE: "cow" is intentionally NOT remapped — wildebeest and buffalo are both detected as "cow"
-# by COCO and the remap is too ambiguous. Roboflow handles rhinoceros; YOLO-World handles
-# wildebeest and buffalo. COCO "cow" is suppressed entirely (see _COCO_SUPPRESS).
+# "cow" → "wildebeest": wildebeest is the primary large bovine on the African savanna.
+#   Buffalo is detected by YOLO-World; rhino is Roboflow-only.
+#   Accepting cow→wildebeest is more accurate than suppressing cow entirely.
 COCO_AFRICAN_REMAP = {
-    "horse":  "antelope",   # antelopes/impalas detected as horses (topi handled below)
-    "dog":    "lion",       # lions detected as dogs (body shape match) — most common in safari
-    "cat":    "lion",       # lions/leopards detected as cat
-    "sheep":  "gazelle",    # gazelles/springbok detected as sheep
+    "horse":  "antelope",    # antelopes/impalas detected as horses (topi handled below)
+    "dog":    "lion",        # lions detected as dogs (body shape match)
+    "cat":    "lion",        # lions/leopards detected as cat
+    "sheep":  "gazelle",     # gazelles/springbok detected as sheep
+    "cow":    "wildebeest",  # large bovines on savanna → wildebeest (buffalo via YOLO-World)
 }
 
 # YOLO-World alternative names for species with weak text-image alignment.
@@ -205,9 +206,9 @@ class WildlifeDetector:
             wm.set_classes([
                 # Big cats (gap — Roboflow/COCO miss these)
                 "leopard",
-                # Large herbivores
-                "hippopotamus", "crocodile", "buffalo", "wildebeest",
-                # Small/medium antelope — explicit names reduce wildebeest confusion
+                # Large herbivores — wildebeest removed: now handled by COCO cow→wildebeest remap
+                "hippopotamus", "crocodile", "buffalo",
+                # Small/medium antelope
                 "gazelle", "thomson's gazelle", "impala", "springbok",
                 # Topi via aliases — tsessebe has the best CLIP embedding
                 "topi", "topi antelope", "sassaby", "tsessebe",
@@ -245,38 +246,38 @@ class WildlifeDetector:
             return self._detect_mock(frame)
 
     # Species COCO (yolov8n) natively detects with high accuracy — always preferred.
-    # Remapped labels (cow→buffalo, dog→lion etc.) are NOT listed here because
-    # those remaps are ambiguous and can misidentify rhinos/other animals.
     _COCO_AUTHORITATIVE = {
-        "giraffe",   # COCO native — very reliable
-        "zebra",     # COCO native — very reliable
-        "elephant",  # COCO native — very reliable
-        "lion",      # via cat/dog → lion remap (high conf only, threshold enforced)
-        "antelope",  # via horse → antelope remap
-        "gazelle",   # via sheep → gazelle remap
+        "giraffe",      # COCO native — very reliable
+        "zebra",        # COCO native — very reliable
+        "elephant",     # COCO native — very reliable
+        "lion",         # via cat/dog → lion remap
+        "antelope",     # via horse → antelope remap
+        "gazelle",      # via sheep → gazelle remap
+        "wildebeest",   # via cow → wildebeest remap (COCO is authoritative — beats YOLO-World)
     }
 
     # Species Roboflow wildlife-detection-xd6ml/1 is authoritative for.
     _RF_AUTHORITATIVE = {"cheetah", "rhinoceros", "elephant", "tiger", "warthog", "lion"}
 
-    # COCO labels to suppress from cascade output entirely.
-    # "cow" is suppressed because it maps to both wildebeest and buffalo ambiguously,
-    # and previously caused wildebeest→rhinoceros via the cow≥50%→rhino rule.
-    # Roboflow handles rhinoceros; YOLO-World handles wildebeest and buffalo.
-    _COCO_SUPPRESS = {"buffalo", "cow"}
+    # COCO labels to suppress from cascade output entirely (post-remap).
+    # "buffalo" suppressed: YOLO-World is more accurate for buffalo (vs cow→buffalo ambiguity).
+    # "cow" is now remapped to "wildebeest" before this filter — so raw "cow" never appears here.
+    _COCO_SUPPRESS = {"buffalo"}
 
     # Roboflow labels to suppress — known misclassification sources.
     _RF_SUPPRESS = {"hyena"}
 
     # If COCO authoritatively detected species A, suppress YOLO-World label B in the same frame.
-    # YOLO-World confuses visual patterns: zebra stripes → leopard, giraffe patches → leopard.
     # Key: COCO-authoritative species that fired  →  Value: World labels to suppress
     _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
-        "zebra":   {"leopard"},    # stripe pattern fires as leopard
-        "giraffe": {"leopard"},    # patch pattern fires as leopard
-        # If COCO fired "gazelle" (via sheep→gazelle remap), the animal is definitely
-        # a small antelope — suppress YOLO-World's wildebeest in the same frame.
-        "gazelle": {"wildebeest"},
+        "zebra":        {"leopard"},     # stripe pattern fires as leopard
+        "giraffe":      {"leopard"},     # patch pattern fires as leopard
+        # COCO fired gazelle (sheep→gazelle) — the animal is a small antelope, not a wildebeest.
+        # wildebeest is now also COCO-authoritative so this entry is belt-and-suspenders.
+        "gazelle":      {"wildebeest"},
+        # COCO fired wildebeest (cow→wildebeest) — suppress YOLO-World's gazelle/impala
+        # to avoid double-reporting the same animal as two different species.
+        "wildebeest":   {"gazelle", "thomson's gazelle", "impala", "springbok"},
     }
 
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
