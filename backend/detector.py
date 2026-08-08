@@ -206,14 +206,15 @@ class WildlifeDetector:
             wm.set_classes([
                 # Big cats (gap — Roboflow/COCO miss these)
                 "leopard",
-                # Large herbivores — wildebeest removed: now handled by COCO cow→wildebeest remap
+                # Large herbivores — wildebeest removed: COCO cow→wildebeest handles it
                 "hippopotamus", "crocodile", "buffalo",
                 # Small/medium antelope
                 "gazelle", "thomson's gazelle", "impala", "springbok",
                 # Topi via aliases — tsessebe has the best CLIP embedding
                 "topi", "topi antelope", "sassaby", "tsessebe",
-                # Predators
-                "hyena", "african wild dog", "jackal",
+                # Predators — african wild dog removed: slender body overlaps with gazelle CLIP
+                # embedding and fires as wild dog on gazelle frames.
+                "hyena", "jackal",
                 # Primates & birds
                 "chimpanzee", "gorilla", "baboon", "ostrich", "vulture", "flamingo",
             ])
@@ -270,12 +271,11 @@ class WildlifeDetector:
     # If COCO authoritatively detected species A, suppress YOLO-World label B in the same frame.
     # Key: COCO-authoritative species that fired  →  Value: World labels to suppress
     _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
-        "zebra":        {"leopard"},     # stripe pattern fires as leopard
-        "giraffe":      {"leopard"},     # patch pattern fires as leopard
-        # COCO fired gazelle (sheep→gazelle) → suppress World wildebeest (small ≠ large bovine)
-        "gazelle":      {"wildebeest"},
-        # COCO fired wildebeest (cow→wildebeest) → suppress World buffalo (same large bovine shape)
-        # and suppress World gazelle/impala/springbok (wrong direction confusion)
+        "zebra":        {"leopard"},     # stripe pattern → leopard
+        "giraffe":      {"leopard"},     # patch pattern → leopard
+        # gazelle (sheep→gazelle): small slender antelope — suppress large-bovine & canid confusion
+        "gazelle":      {"wildebeest", "african wild dog", "jackal"},
+        # wildebeest (cow→wildebeest): large dark bovine — suppress YOLO-World bovine overlap
         "wildebeest":   {"buffalo", "gazelle", "thomson's gazelle", "impala", "springbok"},
     }
 
