@@ -56,6 +56,9 @@ WORLD_SPECIES_THRESHOLDS: dict[str, float] = {
     "topi antelope": 0.12,
     "sassaby":       0.12,
     "tsessebe":      0.12,   # tsessebe has the best CLIP embedding of the topi aliases
+    # wildebeest is a large, dark, shaggy animal — requires higher confidence to avoid
+    # misidentifying small gazelles (Thomson/Grant) as wildebeest via YOLO-World.
+    "wildebeest":    0.40,
 }
 
 # Label remaps for wildlife-detection-xd6ml/1.
@@ -269,8 +272,11 @@ class WildlifeDetector:
     # YOLO-World confuses visual patterns: zebra stripes → leopard, giraffe patches → leopard.
     # Key: COCO-authoritative species that fired  →  Value: World labels to suppress
     _WORLD_SUPPRESS_IF_COCO: dict[str, set] = {
-        "zebra":   {"leopard"},   # stripe pattern fires as leopard
-        "giraffe": {"leopard"},   # patch pattern fires as leopard
+        "zebra":   {"leopard"},    # stripe pattern fires as leopard
+        "giraffe": {"leopard"},    # patch pattern fires as leopard
+        # If COCO fired "gazelle" (via sheep→gazelle remap), the animal is definitely
+        # a small antelope — suppress YOLO-World's wildebeest in the same frame.
+        "gazelle": {"wildebeest"},
     }
 
     def _detect_cascade(self, frame: np.ndarray) -> list[dict]:
